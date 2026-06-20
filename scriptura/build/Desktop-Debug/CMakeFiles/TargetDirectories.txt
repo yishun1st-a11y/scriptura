@@ -1,0 +1,9 @@
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/scriptura.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/edit_cache.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/rebuild_cache.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/list_install_components.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/install.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/install/local.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/install/strip.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/scriptura_autogen_timestamp_deps.dir
+/home/jason/scriptura/scriptura/build/Desktop-Debug/CMakeFiles/scriptura_autogen.dir

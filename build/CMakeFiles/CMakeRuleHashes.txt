@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+ac1cc5c26da7b9c2828134dc1638dc18 CMakeFiles/scriptura_autogen
+46b015ed54ac549ff192e7be463da047 scriptura_autogen/timestamp
