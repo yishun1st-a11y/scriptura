@@ -37,7 +37,7 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: "6.10.2"
-          host: macos
+          host: mac
           target: desktop
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
