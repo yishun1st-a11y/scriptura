@@ -59,7 +59,7 @@ jobs:
           version: "6.10.2"
           host: windows
           target: desktop
-          arch: win64
+          arch: win64_msvc2022_64
       - name: Configure (MSVC)
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -A x64
       - name: Build
