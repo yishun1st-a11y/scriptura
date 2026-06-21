@@ -95,3 +95,4 @@ Makefile
 # Qt Creator
 .qtc/
 .qtc_clangd/
+.qtcreator/

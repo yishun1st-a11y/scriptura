@@ -1,9 +1,0 @@
-/home/jason/scriptura/build/CMakeFiles/scriptura.dir
-/home/jason/scriptura/build/CMakeFiles/edit_cache.dir
-/home/jason/scriptura/build/CMakeFiles/rebuild_cache.dir
-/home/jason/scriptura/build/CMakeFiles/list_install_components.dir
-/home/jason/scriptura/build/CMakeFiles/install.dir
-/home/jason/scriptura/build/CMakeFiles/install/local.dir
-/home/jason/scriptura/build/CMakeFiles/install/strip.dir
-/home/jason/scriptura/build/CMakeFiles/scriptura_autogen_timestamp_deps.dir
-/home/jason/scriptura/build/CMakeFiles/scriptura_autogen.dir
