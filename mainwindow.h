@@ -12,6 +12,17 @@
 #include <QStackedWidget>
 #include "codeeditor.h"
 
+enum ThemeType {
+    ThemeBlueLight,
+    ThemeBlueDark,
+    ThemeGreenLight,
+    ThemeGreenDark,
+    ThemeHighContrastLight,
+    ThemeHighContrastDark,
+    ThemeDefaultLight,
+    ThemeDefaultDark
+};
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -35,10 +46,12 @@ public:
 private slots:
     void on_action_open_project_triggered();
     void on_action_save_triggered();
+    void on_action_save_as_triggered();
     void on_actionCu_t_triggered();
     void on_action_copy_triggered();
     void on_action_Paste_triggered();
     void on_action_Undo_triggered();
+    void on_action_Redo_triggered();
     void on_action_add_file_directory_triggered();
     void on_action_delete_file_directory_triggered();
     void on_action_new_window_triggered();
@@ -47,9 +60,9 @@ private slots:
     void on_action_editor_settings_triggered();
     void on_action_theme_triggered();
     void on_action_license_triggered();
-    void on_fileTree_clicked(const QModelIndex &index);
+    void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
-    void on_goUp_triggered();
+    void goUpClicked();
 
 private:
     Ui::MainWindow *ui;
@@ -61,12 +74,15 @@ private:
     QToolButton *goUpButton;
     QWidget *welcomeWidget;
     QStackedWidget *editorStack;
-    
+    bool darkMode;
+    ThemeType selectedTheme;
+
     void updateCursorPosition();
     QPlainTextEdit* getCurrentEditor();
     QWidget* createWelcomeWidget();
     void showWelcomeScreen();
     void showEditorInterface();
+    void applyTheme(ThemeType theme);
 };
 
 #endif // MAINWINDOW_H

@@ -53,20 +53,22 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_open_project"/>
-    <addaction name="action_save"/>
-    <addaction name="action_add_file_directory"/>
-    <addaction name="action_delete_file_directory"/>
+<addaction name="action_open_project"/>
+     <addaction name="action_save"/>
+     <addaction name="action_save_as"/>
+     <addaction name="action_add_file_directory"/>
+     <addaction name="action_delete_file_directory"/>
    </widget>
-   <widget class="QMenu" name="menu_edit">
-    <property name="title">
-     <string>&amp;Edit</string>
-    </property>
-    <addaction name="actionCu_t"/>
-    <addaction name="action_copy"/>
-    <addaction name="action_Paste"/>
-    <addaction name="action_Undo"/>
-   </widget>
+<widget class="QMenu" name="menu_edit">
+     <property name="title">
+      <string>&amp;Edit</string>
+     </property>
+     <addaction name="actionCu_t"/>
+     <addaction name="action_copy"/>
+     <addaction name="action_Paste"/>
+     <addaction name="action_Undo"/>
+     <addaction name="action_Redo"/>
+    </widget>
    <widget class="QMenu" name="menu_terminal">
     <property name="title">
      <string>&amp;terminal</string>
@@ -95,12 +97,20 @@
     <string>&amp;Open Project</string>
    </property>
   </action>
-  <action name="action_save">
-   <property name="text">
-    <string>&amp;Save</string>
-   </property>
-  </action>
-  <action name="action_add_file_directory">
+<action name="action_save">
+    <property name="text">
+     <string>&amp;Save</string>
+    </property>
+   </action>
+   <action name="action_save_as">
+    <property name="text">
+     <string>Save &amp;As</string>
+    </property>
+    <property name="shortcut">
+     <string>Ctrl+Shift+S</string>
+    </property>
+   </action>
+   <action name="action_add_file_directory">
    <property name="text">
     <string>&amp;Add File/Directory</string>
    </property>
@@ -120,12 +130,23 @@
     <string>&amp;Paste</string>
    </property>
   </action>
-  <action name="action_Undo">
-   <property name="text">
-    <string>&amp;Undo</string>
-   </property>
-  </action>
-  <action name="action_delete_file_directory">
+<action name="action_Undo">
+    <property name="text">
+     <string>&amp;Undo</string>
+    </property>
+    <property name="shortcut">
+     <string>Ctrl+Z</string>
+    </property>
+   </action>
+   <action name="action_Redo">
+    <property name="text">
+     <string>&amp;Redo</string>
+    </property>
+    <property name="shortcut">
+     <string>Ctrl+Y</string>
+    </property>
+   </action>
+   <action name="action_delete_file_directory">
    <property name="text">
     <string>&amp;Delete File/Directory</string>
    </property>

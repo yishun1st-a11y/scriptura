@@ -87,6 +87,55 @@ void CodeHighlighter::setLanguage(const QString &newLanguage)
     rehighlight();
 }
 
+void CodeHighlighter::setDarkMode(bool dark)
+{
+    if (darkMode == dark)
+        return;
+    darkMode = dark;
+    initializeFormats();
+    setLanguage(language);
+}
+
+void CodeHighlighter::setThemeColors(const QColor &keyword, const QColor &string, const QColor &comment,
+                                   const QColor &number, const QColor &preprocessor, const QColor &tag,
+                                   const QColor &attribute, const QColor &cssProperty,
+                                   const QColor &variable, const QColor &function, const QColor &escape,
+                                   const QColor &trailingSpace)
+{
+    keywordFormat.setForeground(keyword);
+    keywordFormat.setFontWeight(QFont::Bold);
+
+    stringFormat.setForeground(string);
+
+    commentFormat.setForeground(comment);
+    commentFormat.setFontItalic(true);
+
+    numberFormat.setForeground(number);
+
+    preprocessorFormat.setForeground(preprocessor);
+    preprocessorFormat.setFontWeight(QFont::Bold);
+
+    tagFormat.setForeground(tag);
+    tagFormat.setFontWeight(QFont::Bold);
+
+    attributeFormat.setForeground(attribute);
+
+    this->cssPropertyFormat.setForeground(cssProperty);
+    this->cssPropertyFormat.setFontWeight(QFont::Bold);
+
+    this->variableFormat.setForeground(variable);
+    this->variableFormat.setFontWeight(QFont::Bold);
+
+    this->functionFormat.setForeground(function);
+    this->functionFormat.setFontWeight(QFont::Bold);
+
+    escapeFormat.setForeground(escape);
+
+    trailingSpaceFormat.setBackground(trailingSpace);
+
+    setLanguage(language);
+}
+
 void CodeHighlighter::highlightBlock(const QString &text)
 {
     if (language == "c" || language == "cpp" || language == "java" || language == "javascript" || language == "typescript" || language == "rust" || language == "go" || language == "css") {
@@ -121,35 +170,69 @@ void CodeHighlighter::highlightBlock(const QString &text)
 
 void CodeHighlighter::initializeFormats()
 {
-    keywordFormat.setForeground(QColor("#1d4ed8"));
-    keywordFormat.setFontWeight(QFont::Bold);
+    if (darkMode) {
+        keywordFormat.setForeground(QColor("#93c5fd"));
+        keywordFormat.setFontWeight(QFont::Bold);
 
-    stringFormat.setForeground(QColor("#15803d"));
+        stringFormat.setForeground(QColor("#86efac"));
 
-    commentFormat.setForeground(QColor("#64748b"));
-    commentFormat.setFontItalic(true);
+        commentFormat.setForeground(QColor("#94a3b8"));
+        commentFormat.setFontItalic(true);
 
-    numberFormat.setForeground(QColor("#9333ea"));
+        numberFormat.setForeground(QColor("#c084fc"));
 
-    preprocessorFormat.setForeground(QColor("#7e22ce"));
-    preprocessorFormat.setFontWeight(QFont::Bold);
+        preprocessorFormat.setForeground(QColor("#a855f7"));
+        preprocessorFormat.setFontWeight(QFont::Bold);
 
-    tagFormat.setForeground(QColor("#2563eb"));
-    tagFormat.setFontWeight(QFont::Bold);
+        tagFormat.setForeground(QColor("#60a5fa"));
+        tagFormat.setFontWeight(QFont::Bold);
 
-    attributeFormat.setForeground(QColor("#a16207"));
+        attributeFormat.setForeground(QColor("#fbbf24"));
 
-    cssPropertyFormat.setForeground(QColor("#0f766e"));
-    cssPropertyFormat.setFontWeight(QFont::Bold);
+        cssPropertyFormat.setForeground(QColor("#2dd4bf"));
+        cssPropertyFormat.setFontWeight(QFont::Bold);
 
-    variableFormat.setForeground(QColor("#0369a1"));
-    variableFormat.setFontWeight(QFont::Bold);
-    functionFormat.setForeground(QColor("#d97706"));
-    functionFormat.setFontWeight(QFont::Bold);
+        variableFormat.setForeground(QColor("#38bdf8"));
+        variableFormat.setFontWeight(QFont::Bold);
 
-    escapeFormat.setForeground(QColor("#0e7490"));
+        functionFormat.setForeground(QColor("#f97316"));
+        functionFormat.setFontWeight(QFont::Bold);
 
-    trailingSpaceFormat.setBackground(QColor("#fecaca"));
+        escapeFormat.setForeground(QColor("#22d3ee"));
+
+        trailingSpaceFormat.setBackground(QColor("#7f1d1d"));
+    } else {
+        keywordFormat.setForeground(QColor("#1d4ed8"));
+        keywordFormat.setFontWeight(QFont::Bold);
+
+        stringFormat.setForeground(QColor("#15803d"));
+
+        commentFormat.setForeground(QColor("#64748b"));
+        commentFormat.setFontItalic(true);
+
+        numberFormat.setForeground(QColor("#9333ea"));
+
+        preprocessorFormat.setForeground(QColor("#7e22ce"));
+        preprocessorFormat.setFontWeight(QFont::Bold);
+
+        tagFormat.setForeground(QColor("#2563eb"));
+        tagFormat.setFontWeight(QFont::Bold);
+
+        attributeFormat.setForeground(QColor("#a16207"));
+
+        cssPropertyFormat.setForeground(QColor("#0f766e"));
+        cssPropertyFormat.setFontWeight(QFont::Bold);
+
+        variableFormat.setForeground(QColor("#0369a1"));
+        variableFormat.setFontWeight(QFont::Bold);
+
+        functionFormat.setForeground(QColor("#d97706"));
+        functionFormat.setFontWeight(QFont::Bold);
+
+        escapeFormat.setForeground(QColor("#0e7490"));
+
+        trailingSpaceFormat.setBackground(QColor("#fecaca"));
+    }
 }
 
 void CodeHighlighter::addRule(const QString &pattern, const QTextCharFormat &format, int captureIndex)
@@ -425,18 +508,94 @@ CodeEditor::CodeEditor(QWidget *parent)
 
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
-    enableIndentationMarkers();
+
+    QTextOption option = document()->defaultTextOption();
+    option.setFlags(option.flags() & ~QTextOption::ShowTabsAndSpaces);
+    option.setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
+    document()->setDefaultTextOption(option);
 }
 
 void CodeEditor::setLanguageForFile(const QString &filePath)
 {
     syntaxHighlighter->setLanguage(languageForFile(filePath));
 }
-void CodeEditor::enableIndentationMarkers()
+
+void CodeEditor::setDarkMode(bool dark)
 {
-    QTextOption option = document()->defaultTextOption();
-    option.setFlags(option.flags() | QTextOption::ShowTabsAndSpaces);
-    document()->setDefaultTextOption(option);
+    syntaxHighlighter->setDarkMode(dark);
+    highlightCurrentLine();
+}
+
+void CodeEditor::setThemeColors(const QColor &keyword, const QColor &string, const QColor &comment,
+                               const QColor &number, const QColor &preprocessor, const QColor &tag,
+                               const QColor &attribute, const QColor &cssProperty,
+                               const QColor &variable, const QColor &function, const QColor &escape,
+                               const QColor &trailingSpace)
+{
+    syntaxHighlighter->setThemeColors(keyword, string, comment, number, preprocessor, tag,
+                                       attribute, cssProperty, variable, function, escape, trailingSpace);
+    highlightCurrentLine();
+}
+void CodeEditor::changeEvent(QEvent *event)
+{
+    QPlainTextEdit::changeEvent(event);
+    if (event->type() == QEvent::FontChange) {
+        QTextOption option = document()->defaultTextOption();
+        option.setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
+        document()->setDefaultTextOption(option);
+    }
+}
+
+void CodeEditor::paintEvent(QPaintEvent *event)
+{
+    QPlainTextEdit::paintEvent(event);
+    drawIndentGuides(event);
+}
+
+void CodeEditor::drawIndentGuides(QPaintEvent *event)
+{
+    if (!m_showIndentGuides)
+        return;
+
+    QPainter painter(viewport());
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    painter.setPen(QPen(QColor(128, 128, 128, 80), 1, Qt::SolidLine));
+
+    qreal tabStop = document()->defaultTextOption().tabStopDistance();
+    if (tabStop <= 0)
+        tabStop = fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4;
+
+    QTextBlock block = firstVisibleBlock();
+    qreal top = blockBoundingGeometry(block).translated(contentOffset()).top();
+    qreal bottom = top + blockBoundingRect(block).height();
+
+    while (block.isValid() && top <= event->rect().bottom()) {
+        if (block.isVisible() && bottom >= event->rect().top()) {
+            QString text = block.text();
+            if (!text.isEmpty() && !text.trimmed().isEmpty()) {
+                qreal width = 0;
+                for (const QChar &c : text) {
+                    if (c == QLatin1Char(' ')) {
+                        width += fontMetrics().horizontalAdvance(QLatin1Char(' '));
+                    } else if (c == QLatin1Char('\t')) {
+                        width = (qFloor(width / tabStop) + 1) * tabStop;
+                    } else {
+                        break;
+                    }
+                }
+
+                for (qreal pos = tabStop; pos <= width + 0.1; pos += tabStop) {
+                    int guideX = static_cast<int>(pos) + static_cast<int>(contentOffset().x());
+                    painter.drawLine(guideX, static_cast<int>(top),
+                                   guideX, static_cast<int>(bottom));
+                }
+            }
+        }
+
+        block = block.next();
+        top = bottom;
+        bottom = top + blockBoundingRect(block).height();
+    }
 }
 
 void CodeEditor::resizeEvent(QResizeEvent *event)
@@ -482,7 +641,8 @@ void CodeEditor::highlightCurrentLine()
 
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection selection;
-        QColor lineColor = QColor(Qt::yellow).lighter(160);
+        QColor lineColor = palette().color(QPalette::Highlight);
+        lineColor.setAlpha(40);
         selection.format.setBackground(lineColor);
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
         selection.cursor = textCursor();
@@ -496,7 +656,7 @@ void CodeEditor::highlightCurrentLine()
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
 {
     QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), Qt::lightGray);
+    painter.fillRect(event->rect(), palette().color(QPalette::AlternateBase));
 
     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
@@ -506,7 +666,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1);
-            painter.setPen(Qt::black);
+            painter.setPen(palette().color(QPalette::Text));
             painter.drawText(0, top, lineNumberArea->width(), fontMetrics().height(),
                             Qt::AlignRight, number);
         }

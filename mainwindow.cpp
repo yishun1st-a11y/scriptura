@@ -24,12 +24,26 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSpacerItem>
+#include <QDialog>
+#include <QScrollArea>
+#include <QButtonGroup>
+#include <QGroupBox>
+#include <QDialogButtonBox>
+#include <QSpinBox>
+#include <QFontComboBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , darkMode(false)
+    , selectedTheme(ThemeDefaultLight)
 {
     ui->setupUi(this);
+
+    QSettings settings;
+    int themeIndex = settings.value("theme/selected", ThemeDefaultLight).toInt();
+    selectedTheme = static_cast<ThemeType>(themeIndex);
+    applyTheme(selectedTheme);
     
     QScreen *screen = QApplication::primaryScreen();
     if (screen) {
@@ -49,11 +63,11 @@ MainWindow::MainWindow(QWidget *parent)
     goUpButton = new QToolButton(this);
     goUpButton->setText("Go Up");
     goUpButton->setEnabled(false);
-    connect(goUpButton, &QToolButton::clicked, this, &MainWindow::on_goUp_triggered);
+    connect(goUpButton, &QToolButton::clicked, this, &MainWindow::goUpClicked);
     toolbar->addWidget(goUpButton);
     
-    connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTree_clicked);
-    
+connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
+
     ui->tabWidget->clear();
     ui->tabWidget->setTabsClosable(true);
     
@@ -187,6 +201,41 @@ void MainWindow::on_action_save_triggered()
     setWindowTitle(QFileInfo(currentFile).fileName() + " - Scriptura");
 }
 
+void MainWindow::on_action_save_as_triggered()
+{
+    QPlainTextEdit *editor = getCurrentEditor();
+    if (!editor)
+        return;
+        
+    QString fileName = QFileDialog::getSaveFileName(this, tr("Save File As"), 
+        currentFile.isEmpty() ? (projectDir.isEmpty() ? QString() : projectDir) : currentFile, tr("All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+    
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Error"), tr("Cannot open file for writing: %1").arg(file.errorString()));
+        return;
+    }
+
+    QTextStream out(&file);
+    out << editor->toPlainText();
+    file.close();
+    
+    for (int i = 0; i < openFiles.size(); i++) {
+        if (openFiles[i].filePath == currentFile) {
+            openFiles[i].filePath = fileName;
+            openFiles[i].fileName = QFileInfo(fileName).fileName();
+            openFiles[i].modified = false;
+            ui->tabWidget->setTabText(i, openFiles[i].fileName);
+            break;
+        }
+    }
+    
+    currentFile = fileName;
+    setWindowTitle(QFileInfo(currentFile).fileName() + " - Scriptura");
+}
+
 void MainWindow::on_actionCu_t_triggered()
 {
     QPlainTextEdit *editor = getCurrentEditor();
@@ -215,6 +264,13 @@ void MainWindow::on_action_Undo_triggered()
         editor->undo();
 }
 
+void MainWindow::on_action_Redo_triggered()
+{
+    QPlainTextEdit *editor = getCurrentEditor();
+    if (editor)
+        editor->redo();
+}
+
 void MainWindow::on_action_add_file_directory_triggered()
 {
     if (projectDir.isEmpty()) {
@@ -222,12 +278,32 @@ void MainWindow::on_action_add_file_directory_triggered()
         return;
     }
     
-    QString fileName = QFileDialog::getSaveFileName(this, tr("Create New File"), projectDir, tr("All Files (*)"));
-    if (!fileName.isEmpty()) {
-        QFile file(fileName);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            file.close();
-            QMessageBox::information(this, tr("Success"), tr("File created: %1").arg(fileName));
+    QMenu menu(this);
+    QAction *addFileAction = menu.addAction(tr("Add File..."));
+    QAction *addDirAction = menu.addAction(tr("Add Directory..."));
+    
+    QPoint pos = mapFromGlobal(QCursor::pos());
+    QAction *selected = menu.exec(mapToGlobal(pos));
+    
+    if (selected == addFileAction) {
+        QString fileName = QFileDialog::getSaveFileName(this, tr("Create New File"), projectDir, tr("All Files (*)"));
+        if (!fileName.isEmpty()) {
+            QFile file(fileName);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                file.close();
+                QMessageBox::information(this, tr("Success"), tr("File created: %1").arg(fileName));
+            }
+        }
+    } else if (selected == addDirAction) {
+        QString dirName = QInputDialog::getText(this, tr("Create Directory"), tr("Directory name:"));
+        if (!dirName.isEmpty()) {
+            QDir dir(projectDir);
+            QString fullPath = projectDir + QDir::separator() + dirName;
+            if (dir.mkdir(dirName)) {
+                QMessageBox::information(this, tr("Success"), tr("Directory created: %1").arg(fullPath));
+            } else {
+                QMessageBox::warning(this, tr("Error"), tr("Failed to create directory."));
+            }
         }
     }
 }
@@ -273,7 +349,7 @@ void MainWindow::on_action_delete_file_directory_triggered()
     }
 }
 
-void MainWindow::on_fileTree_clicked(const QModelIndex &index)
+void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
 {
     QString path = fileModel->filePath(index);
     QFileInfo fileInfo(path);
@@ -303,6 +379,9 @@ void MainWindow::on_fileTree_clicked(const QModelIndex &index)
         
         CodeEditor *editor = new CodeEditor(this);
         editor->setLanguageForFile(path);
+        QSettings settings;
+        QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
+        editor->setFont(savedFont);
         editor->setPlainText(content);
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
         
@@ -346,7 +425,7 @@ void MainWindow::on_tabWidget_tabCloseRequested(int index)
     }
 }
 
-void MainWindow::on_goUp_triggered()
+void MainWindow::goUpClicked()
 {
     if (!rootIndex.isValid())
         return;
@@ -394,22 +473,214 @@ void MainWindow::on_action_editor_settings_triggered()
     if (!editor)
         return;
 
-    bool ok;
-    QFont font = QFontDialog::getFont(&ok, editor->font(), this, tr("Editor Settings"));
-    if (ok) {
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Editor Settings"));
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
+
+    QHBoxLayout *fontLayout = new QHBoxLayout();
+    QLabel *fontLabel = new QLabel(tr("Font:"), &dialog);
+    QFontComboBox *fontCombo = new QFontComboBox(&dialog);
+    fontCombo->setFontFilters(QFontComboBox::ScalableFonts);
+    fontCombo->setCurrentFont(editor->font());
+    fontLayout->addWidget(fontLabel);
+    fontLayout->addWidget(fontCombo);
+    mainLayout->addLayout(fontLayout);
+
+    QHBoxLayout *sizeLayout = new QHBoxLayout();
+    QLabel *sizeLabel = new QLabel(tr("Size:"), &dialog);
+    QSpinBox *sizeSpin = new QSpinBox(&dialog);
+    sizeSpin->setRange(8, 48);
+    sizeSpin->setValue(editor->font().pointSize());
+    sizeLayout->addWidget(sizeLabel);
+    sizeLayout->addWidget(sizeSpin);
+    sizeLayout->addStretch();
+    mainLayout->addLayout(sizeLayout);
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    mainLayout->addWidget(buttonBox);
+
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QFont font = fontCombo->currentFont();
+        font.setPointSize(sizeSpin->value());
         editor->setFont(font);
         QSettings settings;
         settings.setValue("editor/font", font);
     }
 }
 
-void MainWindow::on_action_theme_triggered()
+void MainWindow::applyTheme(ThemeType theme)
 {
-    static bool darkMode = false;
-    darkMode = !darkMode;
-
     QPalette palette;
-    if (darkMode) {
+    bool isDark = false;
+    QColor keyword, string, comment, number, preprocessor, tag, attribute, cssProperty, variable, function, escape;
+
+    switch (theme) {
+    case ThemeBlueLight:
+        palette.setColor(QPalette::Window, QColor(240, 248, 255));
+        palette.setColor(QPalette::WindowText, Qt::black);
+        palette.setColor(QPalette::Base, Qt::white);
+        palette.setColor(QPalette::AlternateBase, QColor(230, 240, 250));
+        palette.setColor(QPalette::Text, Qt::black);
+        palette.setColor(QPalette::Button, QColor(240, 248, 255));
+        palette.setColor(QPalette::ButtonText, Qt::black);
+        palette.setColor(QPalette::Highlight, QColor(100, 150, 255));
+        palette.setColor(QPalette::HighlightedText, Qt::black);
+        isDark = false;
+        keyword = QColor("#1d4ed8");
+        string = QColor("#15803d");
+        comment = QColor("#64748b");
+        number = QColor("#9333ea");
+        preprocessor = QColor("#7e22ce");
+        tag = QColor("#2563eb");
+        attribute = QColor("#a16207");
+        cssProperty = QColor("#0f766e");
+        variable = QColor("#0369a1");
+        function = QColor("#d97706");
+        escape = QColor("#0e7490");
+        break;
+
+    case ThemeBlueDark:
+        palette.setColor(QPalette::Window, QColor(25, 35, 50));
+        palette.setColor(QPalette::WindowText, Qt::white);
+        palette.setColor(QPalette::Base, QColor(15, 25, 35));
+        palette.setColor(QPalette::AlternateBase, QColor(35, 45, 55));
+        palette.setColor(QPalette::Text, Qt::white);
+        palette.setColor(QPalette::Button, QColor(25, 35, 50));
+        palette.setColor(QPalette::ButtonText, Qt::white);
+        palette.setColor(QPalette::Highlight, QColor(100, 150, 255));
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        isDark = true;
+        keyword = QColor("#93c5fd");
+        string = QColor("#86efac");
+        comment = QColor("#94a3b8");
+        number = QColor("#c084fc");
+        preprocessor = QColor("#a855f7");
+        tag = QColor("#60a5fa");
+        attribute = QColor("#fbbf24");
+        cssProperty = QColor("#2dd4bf");
+        variable = QColor("#38bdf8");
+        function = QColor("#f97316");
+        escape = QColor("#22d3ee");
+        break;
+
+    case ThemeGreenLight:
+        palette.setColor(QPalette::Window, QColor(240, 255, 240));
+        palette.setColor(QPalette::WindowText, Qt::black);
+        palette.setColor(QPalette::Base, Qt::white);
+        palette.setColor(QPalette::AlternateBase, QColor(230, 250, 230));
+        palette.setColor(QPalette::Text, Qt::black);
+        palette.setColor(QPalette::Button, QColor(240, 255, 240));
+        palette.setColor(QPalette::ButtonText, Qt::black);
+        palette.setColor(QPalette::Highlight, QColor(100, 200, 100));
+        palette.setColor(QPalette::HighlightedText, Qt::black);
+        isDark = false;
+        keyword = QColor("#16a34a");
+        string = QColor("#15803d");
+        comment = QColor("#64748b");
+        number = QColor("#9333ea");
+        preprocessor = QColor("#7e22ce");
+        tag = QColor("#2563eb");
+        attribute = QColor("#a16207");
+        cssProperty = QColor("#0f766e");
+        variable = QColor("#0369a1");
+        function = QColor("#d97706");
+        escape = QColor("#0e7490");
+        break;
+
+    case ThemeGreenDark:
+        palette.setColor(QPalette::Window, QColor(25, 45, 30));
+        palette.setColor(QPalette::WindowText, Qt::white);
+        palette.setColor(QPalette::Base, QColor(15, 35, 20));
+        palette.setColor(QPalette::AlternateBase, QColor(35, 55, 40));
+        palette.setColor(QPalette::Text, Qt::white);
+        palette.setColor(QPalette::Button, QColor(25, 45, 30));
+        palette.setColor(QPalette::ButtonText, Qt::white);
+        palette.setColor(QPalette::Highlight, QColor(100, 200, 100));
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        isDark = true;
+        keyword = QColor("#86efac");
+        string = QColor("#4ade80");
+        comment = QColor("#94a3b8");
+        number = QColor("#c084fc");
+        preprocessor = QColor("#a855f7");
+        tag = QColor("#60a5fa");
+        attribute = QColor("#fbbf24");
+        cssProperty = QColor("#2dd4bf");
+        variable = QColor("#38bdf8");
+        function = QColor("#f97316");
+        escape = QColor("#22d3ee");
+        break;
+
+    case ThemeHighContrastLight:
+        palette.setColor(QPalette::Window, Qt::white);
+        palette.setColor(QPalette::WindowText, Qt::black);
+        palette.setColor(QPalette::Base, Qt::white);
+        palette.setColor(QPalette::AlternateBase, QColor(240, 240, 240));
+        palette.setColor(QPalette::Text, Qt::black);
+        palette.setColor(QPalette::Button, Qt::white);
+        palette.setColor(QPalette::ButtonText, Qt::black);
+        palette.setColor(QPalette::Highlight, Qt::black);
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        isDark = false;
+        keyword = QColor("#0000cd");
+        string = QColor("#006400");
+        comment = QColor("#696969");
+        number = QColor("#800080");
+        preprocessor = QColor("#800080");
+        tag = QColor("#0000cd");
+        attribute = QColor("#8b4513");
+        cssProperty = QColor("#006400");
+        variable = QColor("#0000cd");
+        function = QColor("#ff8c00");
+        escape = QColor("#006400");
+        break;
+
+    case ThemeHighContrastDark:
+        palette.setColor(QPalette::Window, Qt::black);
+        palette.setColor(QPalette::WindowText, Qt::white);
+        palette.setColor(QPalette::Base, QColor(20, 20, 20));
+        palette.setColor(QPalette::AlternateBase, QColor(30, 30, 30));
+        palette.setColor(QPalette::Text, Qt::white);
+        palette.setColor(QPalette::Button, Qt::black);
+        palette.setColor(QPalette::ButtonText, Qt::white);
+        palette.setColor(QPalette::Highlight, Qt::white);
+        palette.setColor(QPalette::HighlightedText, Qt::black);
+        isDark = true;
+        keyword = QColor("#6495ed");
+        string = QColor("#90ee90");
+        comment = QColor("#d3d3d3");
+        number = QColor("#dda0dd");
+        preprocessor = QColor("#dda0dd");
+        tag = QColor("#6495ed");
+        attribute = QColor("#daa520");
+        cssProperty = QColor("#90ee90");
+        variable = QColor("#6495ed");
+        function = QColor("#ffa500");
+        escape = QColor("#90ee90");
+        break;
+
+    case ThemeDefaultLight:
+        isDark = false;
+        keyword = QColor("#1d4ed8");
+        string = QColor("#15803d");
+        comment = QColor("#64748b");
+        number = QColor("#9333ea");
+        preprocessor = QColor("#7e22ce");
+        tag = QColor("#2563eb");
+        attribute = QColor("#a16207");
+        cssProperty = QColor("#0f766e");
+        variable = QColor("#0369a1");
+        function = QColor("#d97706");
+        escape = QColor("#0e7490");
+        palette = QApplication::style()->standardPalette();
+        break;
+
+    case ThemeDefaultDark:
+    default:
         palette.setColor(QPalette::Window, QColor(53, 53, 53));
         palette.setColor(QPalette::WindowText, Qt::white);
         palette.setColor(QPalette::Base, QColor(25, 25, 25));
@@ -422,11 +693,114 @@ void MainWindow::on_action_theme_triggered()
         palette.setColor(QPalette::BrightText, Qt::red);
         palette.setColor(QPalette::Link, QColor(42, 130, 218));
         palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-        palette.setColor(QPalette::HighlightedText, Qt::black);
-    } else {
-        palette = QApplication::style()->standardPalette();
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        palette.setColor(QPalette::Light, QColor(70, 70, 70));
+        palette.setColor(QPalette::Mid, QColor(45, 45, 45));
+        palette.setColor(QPalette::Dark, QColor(35, 35, 35));
+        palette.setColor(QPalette::Midlight, QColor(60, 60, 60));
+        isDark = true;
+        keyword = QColor("#93c5fd");
+        string = QColor("#86efac");
+        comment = QColor("#94a3b8");
+        number = QColor("#c084fc");
+        preprocessor = QColor("#a855f7");
+        tag = QColor("#60a5fa");
+        attribute = QColor("#fbbf24");
+        cssProperty = QColor("#2dd4bf");
+        variable = QColor("#38bdf8");
+        function = QColor("#f97316");
+        escape = QColor("#22d3ee");
+        break;
     }
+
+    QApplication::setStyle("Fusion");
     QApplication::setPalette(palette);
+    QString sheet = qApp->styleSheet();
+    qApp->setStyleSheet(sheet);
+
+    for (QWidget *widget : QApplication::allWidgets()) {
+        widget->setPalette(palette);
+        widget->setAutoFillBackground(true);
+        if (CodeEditor *editor = qobject_cast<CodeEditor*>(widget)) {
+            editor->viewport()->setPalette(palette);
+            editor->viewport()->setAutoFillBackground(true);
+            editor->setDarkMode(isDark);
+            QColor trailingBg = isDark ? QColor("#7f1d1d") : QColor("#fecaca");
+            editor->setThemeColors(keyword, string, comment, number, preprocessor, tag,
+                                   attribute, cssProperty, variable, function, escape, trailingBg);
+        }
+    }
+
+    QSettings settings;
+    settings.setValue("theme/selected", static_cast<int>(theme));
+}
+
+void MainWindow::on_action_theme_triggered()
+{
+    QDialog *dialog = new QDialog(this);
+    dialog->setWindowTitle(tr("Theme Selection"));
+    dialog->resize(400, 300);
+    dialog->setModal(true);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+
+    QScrollArea *scrollArea = new QScrollArea(dialog);
+    scrollArea->setWidgetResizable(true);
+
+    QWidget *scrollContent = new QWidget();
+    QVBoxLayout *scrollLayout = new QVBoxLayout(scrollContent);
+
+    QButtonGroup *themeGroup = new QButtonGroup(scrollContent);
+
+    struct ThemeInfo {
+        QString name;
+        ThemeType type;
+        QColor bgColor, textColor;
+    };
+
+    ThemeInfo themes[] = {
+        {"Default Light", ThemeDefaultLight, QColor(240, 240, 240), Qt::black},
+        {"Default Dark", ThemeDefaultDark, QColor(45, 45, 45), Qt::white},
+        {"Blue Light", ThemeBlueLight, QColor(240, 248, 255), Qt::black},
+        {"Blue Dark", ThemeBlueDark, QColor(25, 35, 50), Qt::white},
+        {"Green Light", ThemeGreenLight, QColor(240, 255, 240), Qt::black},
+        {"Green Dark", ThemeGreenDark, QColor(25, 45, 30), Qt::white},
+        {"High Contrast Light", ThemeHighContrastLight, Qt::white, Qt::black},
+        {"High Contrast Dark", ThemeHighContrastDark, Qt::black, Qt::white}
+    };
+
+    for (const ThemeInfo &themeInfo : themes) {
+        QPushButton *btn = new QPushButton(themeInfo.name, scrollContent);
+        btn->setCheckable(true);
+        btn->setProperty("themeType", static_cast<int>(themeInfo.type));
+        btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 10px;")
+                          .arg(themeInfo.bgColor.name()).arg(themeInfo.textColor.name()));
+        scrollLayout->addWidget(btn);
+        themeGroup->addButton(btn);
+    }
+
+    scrollArea->setWidget(scrollContent);
+    mainLayout->addWidget(scrollArea);
+
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch();
+    QPushButton *applyButton = new QPushButton(tr("Apply"), dialog);
+    buttonLayout->addWidget(applyButton);
+    mainLayout->addLayout(buttonLayout);
+
+    ThemeType chosenTheme = selectedTheme;
+
+    connect(themeGroup, &QButtonGroup::buttonClicked, [this, &chosenTheme](QAbstractButton *button) {
+        chosenTheme = static_cast<ThemeType>(button->property("themeType").toInt());
+    });
+
+    connect(applyButton, &QPushButton::clicked, dialog, &QDialog::accept);
+
+    int result = dialog->exec();
+    if (result == QDialog::Accepted && chosenTheme != selectedTheme) {
+        selectedTheme = chosenTheme;
+        applyTheme(selectedTheme);
+    }
 }
 
 void MainWindow::on_action_license_triggered()

@@ -9,8 +9,11 @@ A simple Qt-based text editor with project file browsing.
 - **Directory navigation**: "Go Up" button to navigate to parent directories
 - **Tabbed editing**: Multiple files open in tabs
 - **Status bar**: Shows cursor position (line/column)
-- **Edit operations**: Cut, Copy, Paste, Undo
-- **File management**: Create and delete files within projects
+- **Edit operations**: Cut, Copy, Paste, Undo, Redo
+- **File management**: Create files and directories within projects
+- **Delete files/directories**: Remove files or directories from the project
+- **Save As**: Save files with a different name
+- **Theme support**: Multiple light/dark themes available
 
 ## Building
 

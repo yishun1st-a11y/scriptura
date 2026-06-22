@@ -1,6 +1,8 @@
 #ifndef CODEEDITOR_H
 #define CODEEDITOR_H
 
+#include <QPainter>
+#include <QPaintEvent>
 #include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QString>
@@ -9,12 +11,20 @@
 #include <QTextDocument>
 #include <QVector>
 #include <QWidget>
+#include <QColor>
+#include <QEvent>
 
 class CodeHighlighter : public QSyntaxHighlighter
 {
 public:
     explicit CodeHighlighter(QTextDocument *parent = nullptr);
     void setLanguage(const QString &language);
+    void setDarkMode(bool dark);
+    void setThemeColors(const QColor &keyword, const QColor &string, const QColor &comment,
+                        const QColor &number, const QColor &preprocessor, const QColor &tag,
+                        const QColor &attribute, const QColor &cssProperty,
+                        const QColor &variable, const QColor &function, const QColor &escape,
+                        const QColor &trailingSpace);
 
 protected:
     void highlightBlock(const QString &text) override;
@@ -50,6 +60,7 @@ private:
     bool inTripleString = false;
     bool inHtmlComment = false;
     QString tripleDelimiter;
+    bool darkMode = false;
 
     QTextCharFormat keywordFormat;
     QTextCharFormat stringFormat;
@@ -72,10 +83,17 @@ class CodeEditor : public QPlainTextEdit
 public:
     CodeEditor(QWidget *parent = nullptr);
     void setLanguageForFile(const QString &filePath);
-    void enableIndentationMarkers();
+    void setDarkMode(bool dark);
+    void setThemeColors(const QColor &keyword, const QColor &string, const QColor &comment,
+                        const QColor &number, const QColor &preprocessor, const QColor &tag,
+                        const QColor &attribute, const QColor &cssProperty,
+                        const QColor &variable, const QColor &function, const QColor &escape,
+                        const QColor &trailingSpace = QColor());
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount = 0);
@@ -85,9 +103,11 @@ private slots:
 private:
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
+    void drawIndentGuides(QPaintEvent *event);
 
     QWidget *lineNumberArea;
     CodeHighlighter *syntaxHighlighter;
+    bool m_showIndentGuides = true;
 };
 
 class LineNumberArea : public QWidget
