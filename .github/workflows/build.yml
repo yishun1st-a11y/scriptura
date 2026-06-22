@@ -61,11 +61,13 @@ jobs:
           target: desktop
           arch: win64_msvc2022_64
       - name: Configure (MSVC)
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -A x64
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -A x64 -DCMAKE_INSTALL_PREFIX=build/install
       - name: Build
         run: cmake --build build --config Release
+      - name: Install (Windows deployment)
+        run: cmake --install build --config Release
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: scriptura-windows
-          path: build/Release/scriptura.exe
+          path: build/install/bin/*
