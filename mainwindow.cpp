@@ -302,6 +302,7 @@ void MainWindow::on_fileTree_clicked(const QModelIndex &index)
         }
         
         CodeEditor *editor = new CodeEditor(this);
+        editor->setLanguageForFile(path);
         editor->setPlainText(content);
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
         

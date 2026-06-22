@@ -1,12 +1,423 @@
 #include "codeeditor.h"
 
+#include <QColor>
+#include <QFileInfo>
+#include <QFont>
 #include <QPainter>
+#include <QRegularExpression>
+#include <QRegularExpressionMatch>
+#include <QRegularExpressionMatchIterator>
 #include <QTextBlock>
 #include <QTextFormat>
+#include <QTextOption>
+
+namespace {
+
+QString languageForFile(const QString &filePath)
+{
+    const QString extension = QFileInfo(filePath).suffix().toLower();
+
+    if (extension == "py" || extension == "pyw")
+        return "python";
+    if (extension == "c")
+        return "c";
+    if (extension == "cpp" || extension == "cc" || extension == "cxx" || extension == "h" || extension == "hh" || extension == "hpp" || extension == "hxx")
+        return "cpp";
+    if (extension == "java")
+        return "java";
+    if (extension == "js" || extension == "jsx" || extension == "mjs")
+        return "javascript";
+    if (extension == "ts" || extension == "tsx")
+        return "typescript";
+    if (extension == "rs")
+        return "rust";
+    if (extension == "go")
+        return "go";
+    if (extension == "sh" || extension == "bash" || extension == "zsh")
+        return "shell";
+    if (extension == "html" || extension == "htm")
+        return "html";
+    if (extension == "css" || extension == "scss" || extension == "sass" || extension == "less")
+        return "css";
+
+    return "text";
+}
+
+}
+
+CodeHighlighter::CodeHighlighter(QTextDocument *parent)
+    : QSyntaxHighlighter(parent)
+{
+    initializeFormats();
+    setLanguage("text");
+}
+
+void CodeHighlighter::setLanguage(const QString &newLanguage)
+{
+    language = newLanguage.toLower();
+    rules.clear();
+    inBlockComment = false;
+    inTripleString = false;
+    inHtmlComment = false;
+    tripleDelimiter.clear();
+
+    if (language == "python")
+        setupPython();
+    else if (language == "c" || language == "cpp")
+        setupCStyle();
+    else if (language == "java")
+        setupJava();
+    else if (language == "javascript")
+        setupJavaScript();
+    else if (language == "typescript")
+        setupTypeScript();
+    else if (language == "rust")
+        setupRust();
+    else if (language == "go")
+        setupGo();
+    else if (language == "shell")
+        setupShell();
+    else if (language == "html")
+        setupHtml();
+    else if (language == "css")
+        setupCss();
+    else
+        setupPlainText();
+
+    rehighlight();
+}
+
+void CodeHighlighter::highlightBlock(const QString &text)
+{
+    if (language == "c" || language == "cpp" || language == "java" || language == "javascript" || language == "typescript" || language == "rust" || language == "go" || language == "css") {
+        handleCStyleBlockComment(text);
+        if (inBlockComment)
+            return;
+    }
+
+    if (language == "html" && inHtmlComment) {
+        handleHtmlComment(text);
+        if (inHtmlComment)
+            return;
+    }
+
+    for (const HighlightingRule &rule : rules) {
+        QRegularExpressionMatchIterator iterator = rule.pattern.globalMatch(text);
+        while (iterator.hasNext()) {
+            QRegularExpressionMatch match = iterator.next();
+            const int start = match.capturedStart(rule.captureIndex);
+            const int length = match.capturedLength(rule.captureIndex);
+            if (start >= 0)
+                setFormat(start, length, rule.format);
+        }
+    }
+
+    if (language == "html")
+        handleHtmlComment(text);
+
+    if (language == "python")
+        handlePythonTripleString(text);
+}
+
+void CodeHighlighter::initializeFormats()
+{
+    keywordFormat.setForeground(QColor("#1d4ed8"));
+    keywordFormat.setFontWeight(QFont::Bold);
+
+    stringFormat.setForeground(QColor("#15803d"));
+
+    commentFormat.setForeground(QColor("#64748b"));
+    commentFormat.setFontItalic(true);
+
+    numberFormat.setForeground(QColor("#9333ea"));
+
+    preprocessorFormat.setForeground(QColor("#7e22ce"));
+    preprocessorFormat.setFontWeight(QFont::Bold);
+
+    tagFormat.setForeground(QColor("#2563eb"));
+    tagFormat.setFontWeight(QFont::Bold);
+
+    attributeFormat.setForeground(QColor("#a16207"));
+
+    cssPropertyFormat.setForeground(QColor("#0f766e"));
+    cssPropertyFormat.setFontWeight(QFont::Bold);
+
+    variableFormat.setForeground(QColor("#0369a1"));
+    variableFormat.setFontWeight(QFont::Bold);
+    functionFormat.setForeground(QColor("#d97706"));
+    functionFormat.setFontWeight(QFont::Bold);
+
+    escapeFormat.setForeground(QColor("#0e7490"));
+
+    trailingSpaceFormat.setBackground(QColor("#fecaca"));
+}
+
+void CodeHighlighter::addRule(const QString &pattern, const QTextCharFormat &format, int captureIndex)
+{
+    HighlightingRule rule;
+    rule.pattern = QRegularExpression(pattern);
+    rule.format = format;
+    rule.captureIndex = captureIndex;
+    rules.append(rule);
+}
+
+void CodeHighlighter::setupCStyle()
+{
+    addRule("\\b(alignas|alignof|and|and_eq|asm|auto|bitand|bitor|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|while|xor|xor_eq)\\b", keywordFormat);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!switch\\b)(?!catch\\b)(?!return\\b)(?!sizeof\\b)(?!typeof\\b)(?!new\\b)(?!delete\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\bint\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bfloat\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bdouble\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bchar\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bbool\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bauto\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bString\\s+(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?(?:[fFlLuU]|ll|LL)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("#\\s*\\w+.*", preprocessorFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupPython()
+{
+    addRule("\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b", keywordFormat);
+    addRule("^\\s*def\\s+([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\b(print|len|range|str|int|float|list|dict|set|tuple|open|sum|enumerate|zip|map|filter|sorted|reversed|abs|round|isinstance|issubclass|super|property|staticmethod|classmethod)\\b", variableFormat);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!return\\b)(?!print\\b)(?!len\\b)(?!range\\b)(?!str\\b)(?!int\\b)(?!float\\b)(?!list\\b)(?!dict\\b)(?!set\\b)(?!tuple\\b)(?!open\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("^\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("#[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupJava()
+{
+    addRule("\\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while|var|record|sealed|permits|yields)\\b", keywordFormat);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!switch\\b)(?!catch\\b)(?!return\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\bint\\s+(?:final\\s+)?(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bString\\s+(?:final\\s+)?(?:\\*\\s*)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bvar\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("=\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule(",\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("\\(\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?[fFdDlL]?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupJavaScript()
+{
+    addRule("\\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|function|if|import|in|instanceof|let|new|null|of|return|super|switch|this|throw|true|try|typeof|undefined|var|void|while|with|yield|static|get|set)\\b", keywordFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!switch\\b)(?!catch\\b)(?!return\\b)(?!typeof\\b)(?!delete\\b)(?!void\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\blet\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bconst\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bvar\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("=\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule(",\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("\\(\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("`(?:\\\\.|[^`\\\\])*`", stringFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupTypeScript()
+{
+    addRule("\\b(abstract|any|as|async|await|boolean|break|case|catch|class|const|continue|debugger|declare|default|delete|do|else|enum|export|extends|false|finally|for|from|function|get|if|implements|import|in|instanceof|interface|keyof|let|module|namespace|new|null|number|object|of|private|protected|public|readonly|return|set|static|string|super|switch|symbol|this|throw|true|try|type|typeof|undefined|unknown|var|void|while|with|yield)\\b", keywordFormat);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!switch\\b)(?!catch\\b)(?!return\\b)(?!typeof\\b)(?!delete\\b)(?!void\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\blet\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bconst\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("\\bvar\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("=\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule(",\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("\\(\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("`(?:\\\\.|[^`\\\\])*`", stringFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupRust()
+{
+    addRule("\\b(as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while)\\b", keywordFormat);
+    addRule("\\bfn\\s+([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!while\\b)(?!match\\b)(?!loop\\b)(?!return\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\blet\\s+(?:mut\\s+)?([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("=\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule(",\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("\\(\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:_\\d+)*(?:\\.\\d+(?:_\\d+)*)?(?:[eE][+-]?\\d+)?(?:f32|f64|i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupGo()
+{
+    addRule("\\b(break|default|func|interface|select|case|defer|go|map|struct|chan|else|goto|package|switch|const|fallthrough|if|range|type|continue|for|import|return|var)\\b", keywordFormat);
+    addRule("\\bfunc\\s+(?:\\([^)]*\\)\\s*)?([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\b(?!if\\b)(?!for\\b)(?!range\\b)(?!switch\\b)(?!select\\b)(?!defer\\b)(?!go\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    addRule("\\bvar\\s+([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("=\\s*([A-Za-z_]\\w*)\\s*(?==)", variableFormat, 1);
+    addRule(":\\s*=\\s*([A-Za-z_]\\w*)", variableFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?(?:[iI]|[eE][+-]?\\d+)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+    addRule("`[^`]*`", stringFormat);
+    addRule("//[^\\n]*", commentFormat);
+}
+
+void CodeHighlighter::setupShell()
+{
+    addRule("\\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|select|in|time|coproc)\\b", keywordFormat);
+    addRule("\\b\\d+\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("^\\s*([A-Za-z_]\\w*)\\s*\\(\\s*\\)", functionFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("'[^']*'", stringFormat);
+    addRule("#[^\\n]*", commentFormat);
+    addRule("\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?", variableFormat);
+}
+
+void CodeHighlighter::setupHtml()
+{
+    addRule("<\\s*/?\\s*([A-Za-z][A-Za-z0-9:-]*)", tagFormat, 1);
+    addRule("\\s([A-Za-z_:][A-Za-z0-9:_.-]*)\\s*=", attributeFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+}
+
+void CodeHighlighter::setupCss()
+{
+    addRule("\\b(color|background|background-color|margin|padding|display|position|top|right|bottom|left|width|height|min-width|max-width|min-height|max-height|font|font-size|font-weight|font-family|flex|grid|gap|border|border-radius|overflow|z-index|cursor|opacity|transform|transition|box-shadow|text-align|line-height)\\s*:", cssPropertyFormat, 1);
+    addRule("\\b(rgb|hsl|calc|var|clamp|min|max)\\s*(?=\\()", functionFormat, 1);
+    addRule("[ \\t]+$", trailingSpaceFormat);
+    addRule("\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms)?\\b", numberFormat);
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+}
+
+void CodeHighlighter::setupPlainText()
+{
+}
+
+void CodeHighlighter::handleCStyleBlockComment(const QString &text)
+{
+    int index = 0;
+
+    if (inBlockComment) {
+        index = text.indexOf("*/");
+        if (index >= 0) {
+            setFormat(0, index + 2, commentFormat);
+            inBlockComment = false;
+            index = 0;
+        } else {
+            setFormat(0, text.length(), commentFormat);
+            return;
+        }
+    }
+
+    while ((index = text.indexOf("/*", index)) >= 0) {
+        const int end = text.indexOf("*/", index + 2);
+        int length;
+
+        if (end >= 0) {
+            length = end - index + 2;
+            index = end + 2;
+        } else {
+            length = text.length() - index;
+            inBlockComment = true;
+        }
+
+        setFormat(index, length, commentFormat);
+
+        if (inBlockComment)
+            return;
+    }
+}
+
+void CodeHighlighter::handlePythonTripleString(const QString &text)
+{
+    if (inTripleString) {
+        const int end = text.indexOf(tripleDelimiter);
+        if (end >= 0) {
+            setFormat(0, end + 3, stringFormat);
+            inTripleString = false;
+            tripleDelimiter.clear();
+        } else {
+            setFormat(0, text.length(), stringFormat);
+            return;
+        }
+    }
+
+    QRegularExpressionMatchIterator iterator = QRegularExpression("\"\"\"|'''").globalMatch(text);
+    while (iterator.hasNext()) {
+        QRegularExpressionMatch match = iterator.next();
+        const QString delimiter = match.captured(0);
+        const int start = match.capturedStart();
+        const int end = text.indexOf(delimiter, start + 3);
+
+        if (end >= 0) {
+            setFormat(start, end + 3 - start, stringFormat);
+        } else {
+            setFormat(start, text.length() - start, stringFormat);
+            inTripleString = true;
+            tripleDelimiter = delimiter;
+            return;
+        }
+    }
+}
+
+void CodeHighlighter::handleHtmlComment(const QString &text)
+{
+    if (inHtmlComment) {
+        const int end = text.indexOf("-->");
+        if (end >= 0) {
+            setFormat(0, end + 3, commentFormat);
+            inHtmlComment = false;
+        } else {
+            setFormat(0, text.length(), commentFormat);
+            return;
+        }
+    }
+
+    int index = 0;
+    while ((index = text.indexOf("<!--", index)) >= 0) {
+        const int end = text.indexOf("-->", index + 4);
+        int length;
+
+        if (end >= 0) {
+            length = end + 4 - index;
+            index = end + 4;
+        } else {
+            length = text.length() - index;
+            inHtmlComment = true;
+        }
+
+        setFormat(index, length, commentFormat);
+
+        if (inHtmlComment)
+            return;
+    }
+}
 
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent)
     , lineNumberArea(new LineNumberArea(this))
+    , syntaxHighlighter(new CodeHighlighter(document()))
 {
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
@@ -14,6 +425,18 @@ CodeEditor::CodeEditor(QWidget *parent)
 
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
+    enableIndentationMarkers();
+}
+
+void CodeEditor::setLanguageForFile(const QString &filePath)
+{
+    syntaxHighlighter->setLanguage(languageForFile(filePath));
+}
+void CodeEditor::enableIndentationMarkers()
+{
+    QTextOption option = document()->defaultTextOption();
+    option.setFlags(option.flags() | QTextOption::ShowTabsAndSpaces);
+    document()->setDefaultTextOption(option);
 }
 
 void CodeEditor::resizeEvent(QResizeEvent *event)
