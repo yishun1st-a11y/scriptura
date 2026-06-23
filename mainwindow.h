@@ -10,6 +10,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QStackedWidget>
+#include <QMenu>
 #include "codeeditor.h"
 
 enum ThemeType {
@@ -63,7 +64,7 @@ private slots:
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
-    void on_sidebarToggleButton_clicked();
+    void on_action_open_file_triggered();
 
 private:
     Ui::MainWindow *ui;
@@ -73,7 +74,6 @@ private:
     QList<OpenFile> openFiles;
     QFileSystemModel *fileModel;
     QToolButton *goUpButton;
-    QToolButton *sidebarToggleButton;
     QToolButton *fileTreeToggleButton;
     QToolButton *terminalButton;
     QWidget *welcomeWidget;
@@ -82,14 +82,15 @@ private:
     ThemeType selectedTheme;
 
     void updateCursorPosition();
+    void updateStatusBar();
+    void updateTabModified(int index, bool modified);
+    QString findTerminal();
     QPlainTextEdit* getCurrentEditor();
     QWidget* createWelcomeWidget();
     void showWelcomeScreen();
     void showEditorInterface();
     void applyTheme(ThemeType theme);
     void setSidebarCollapsed(bool collapsed);
-    void positionSidebarToggleButton();
-    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // MAINWINDOW_H

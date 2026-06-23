@@ -31,13 +31,13 @@
 #include <QDialogButtonBox>
 #include <QSpinBox>
 #include <QFontComboBox>
+#include <QStandardPaths>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , darkMode(false)
     , selectedTheme(ThemeDefaultLight)
-    , sidebarToggleButton(nullptr)
 {
     ui->setupUi(this);
 
@@ -66,14 +66,6 @@ MainWindow::MainWindow(QWidget *parent)
     goUpButton->setEnabled(false);
     connect(goUpButton, &QToolButton::clicked, this, &MainWindow::goUpClicked);
     toolbar->addWidget(goUpButton);
-    
-    sidebarToggleButton = new QToolButton(ui->centralwidget);
-    sidebarToggleButton->setText("▶");
-    sidebarToggleButton->setToolTip(tr("Show Sidebar"));
-    sidebarToggleButton->setFixedSize(20, 60);
-    sidebarToggleButton->setStyleSheet("QToolButton { border: none; background: palette(button); padding: 2px; } QToolButton:hover { background: palette(highlight); }");
-    sidebarToggleButton->hide();
-    connect(sidebarToggleButton, &QToolButton::clicked, this, &MainWindow::on_sidebarToggleButton_clicked);
 
     ui->iconSideBar->setFixedWidth(50);
     ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
@@ -104,6 +96,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->tabWidget->setTabsClosable(true);
     
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::on_tabWidget_tabCloseRequested);
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, &MainWindow::updateStatusBar);
 
     ui->editorLayout->removeWidget(ui->tabWidget);
     editorStack = new QStackedWidget(this);
@@ -267,7 +260,56 @@ void MainWindow::on_action_save_as_triggered()
     }
     
     currentFile = fileName;
-    setWindowTitle(QFileInfo(currentFile).fileName() + " - Scriptura");
+    setWindowTitle(QFileInfo(fileName).fileName() + " - Scriptura");
+}
+
+void MainWindow::on_action_open_file_triggered()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Open File"),
+        projectDir.isEmpty() ? QDir::homePath() : projectDir,
+        tr("All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Error"),
+            tr("Cannot open file: %1").arg(file.errorString()));
+        return;
+    }
+
+    QTextStream in(&file);
+    QString content = in.readAll();
+    file.close();
+
+    for (int i = 0; i < openFiles.size(); i++) {
+        if (openFiles[i].filePath == fileName) {
+            showEditorInterface();
+            ui->tabWidget->setCurrentIndex(i);
+            return;
+        }
+    }
+
+    CodeEditor *editor = new CodeEditor(this);
+    editor->setLanguageForFile(fileName);
+    QSettings settings;
+    QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
+    editor->setFont(savedFont);
+    editor->setTabWidth(settings.value("editor/tabWidth", editor->tabWidth()).toInt());
+    int w = settings.value("editor/width", 0).toInt();
+    if (w > 0) editor->setMinimumWidth(w);
+    editor->setPlainText(content);
+    int tabIndex = openFiles.size();
+    connect(editor, &QPlainTextEdit::modificationChanged, this,
+            [this, tabIndex](bool m) { updateTabModified(tabIndex, m); });
+    connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateStatusBar);
+
+    openFiles.append({fileName, QFileInfo(fileName).fileName(), false});
+    showEditorInterface();
+    ui->tabWidget->addTab(editor, QFileInfo(fileName).fileName());
+    ui->tabWidget->setCurrentWidget(editor);
+    currentFile = fileName;
+    setWindowTitle(QFileInfo(fileName).fileName() + " - Scriptura");
 }
 
 void MainWindow::on_actionCu_t_triggered()
@@ -422,13 +464,16 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         if (savedEditorWidth > 0)
             editor->setMinimumWidth(savedEditorWidth);
         editor->setPlainText(content);
+        int tabIndex = openFiles.size();
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
-        
+        connect(editor, &QPlainTextEdit::modificationChanged, this,
+                [this, tabIndex](bool m) { updateTabModified(tabIndex, m); });
+
         OpenFile openFile;
         openFile.filePath = path;
         openFile.fileName = fileInfo.fileName();
         openFiles.append(openFile);
-        
+
         showEditorInterface();
         ui->tabWidget->addTab(editor, openFile.fileName);
         ui->tabWidget->setCurrentWidget(editor);
@@ -440,6 +485,23 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
 
 void MainWindow::on_tabWidget_tabCloseRequested(int index)
 {
+    if (openFiles[index].modified) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this, tr("Unsaved Changes"),
+            tr("%1 has unsaved changes. Save before closing?").arg(openFiles[index].fileName),
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+        if (reply == QMessageBox::Save) {
+            ui->tabWidget->setCurrentIndex(index);
+            currentFile = openFiles[index].filePath;
+            on_action_save_triggered();
+            if (openFiles[index].modified) {
+                return;
+            }
+        } else if (reply == QMessageBox::Cancel) {
+            return;
+        }
+    }
+
     if (index >= 0 && index < openFiles.size()) {
         if (openFiles[index].filePath == currentFile) {
             currentFile = "";
@@ -453,11 +515,7 @@ void MainWindow::on_tabWidget_tabCloseRequested(int index)
     
     if (ui->tabWidget->count() > 0) {
         showEditorInterface();
-        QPlainTextEdit *editor = getCurrentEditor();
-        if (editor) {
-            currentFile = openFiles[ui->tabWidget->currentIndex()].filePath;
-            setWindowTitle(QFileInfo(currentFile).fileName() + " - Scriptura");
-        }
+        updateStatusBar();
     } else {
         showWelcomeScreen();
         setWindowTitle(projectDir.isEmpty() ? "Scriptura" : QFileInfo(projectDir).fileName() + " - Scriptura");
@@ -481,7 +539,8 @@ void MainWindow::goUpClicked()
 
 void MainWindow::on_action_new_window_triggered()
 {
-    QProcess::startDetached("konsole", QStringList());
+    QString term = findTerminal();
+    QProcess::startDetached(term, QStringList());
 }
 
 void MainWindow::on_action_clone_window_triggered()
@@ -496,7 +555,25 @@ void MainWindow::on_action_clone_window_triggered()
     if (!dir.exists())
         return;
 
-    QProcess::startDetached("konsole", QStringList() << "--workdir" << targetDir);
+    QString term = findTerminal();
+    QStringList args;
+#ifdef Q_OS_MAC
+    args << "-a" << "Terminal" << targetDir;
+#elif defined(Q_OS_WIN)
+    args << "/k" << "cd" << "/d" << QDir::toNativeSeparators(targetDir);
+#else
+    if (term == "gnome-terminal")
+        args << "--working-directory" << targetDir;
+    else if (term == "konsole")
+        args << "--workdir" << targetDir;
+    else if (term == "xfce4-terminal")
+        args << "--working-directory" << targetDir;
+    else if (term == "alacritty" || term == "kitty")
+        args << "--working-directory" << targetDir;
+    else
+        args << "--working-directory" << targetDir;
+#endif
+    QProcess::startDetached(term, args);
 }
 
 void MainWindow::on_action_about_triggered()
@@ -573,18 +650,23 @@ void MainWindow::on_action_editor_settings_triggered()
     if (dialog->exec() == QDialog::Accepted) {
         QSettings settings;
 
-        if (editor) {
-            QFont font = fontCombo->currentFont();
-            font.setPointSize(sizeSpin->value());
-            editor->setFont(font);
-            settings.setValue("editor/font", font);
+        QFont font = fontCombo->currentFont();
+        font.setPointSize(sizeSpin->value());
+        settings.setValue("editor/font", font);
 
-            editor->setTabWidth(tabSpin->value());
-            settings.setValue("editor/tabWidth", tabSpin->value());
+        int tabWidth = tabSpin->value();
+        settings.setValue("editor/tabWidth", tabWidth);
 
-            int editorWidth = widgetSizeSpin->value();
-            editor->setMinimumWidth(editorWidth);
-            settings.setValue("editor/width", editorWidth);
+        int editorWidth = widgetSizeSpin->value();
+        settings.setValue("editor/width", editorWidth);
+
+        for (int i = 0; i < ui->tabWidget->count(); i++) {
+            if (CodeEditor *ed = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i))) {
+                ed->setFont(font);
+                ed->setTabWidth(tabWidth);
+                if (editorWidth > 0)
+                    ed->setMinimumWidth(editorWidth);
+            }
         }
     }
 }
@@ -856,6 +938,10 @@ void MainWindow::on_action_theme_triggered()
         themeGroup->addButton(btn);
     }
 
+    for (QAbstractButton *btn : themeGroup->buttons()) {
+        btn->setChecked(btn->property("themeType").toInt() == static_cast<int>(selectedTheme));
+    }
+
     scrollArea->setWidget(scrollContent);
     mainLayout->addWidget(scrollArea);
 
@@ -901,11 +987,6 @@ void MainWindow::on_action_license_triggered()
         "SOFTWARE."));
 }
 
-void MainWindow::on_sidebarToggleButton_clicked()
-{
-    setSidebarCollapsed(false);
-}
-
 void MainWindow::setSidebarCollapsed(bool collapsed)
 {
     QSettings settings;
@@ -917,28 +998,49 @@ void MainWindow::setSidebarCollapsed(bool collapsed)
             tb->hide();
         if (fileTreeToggleButton)
             fileTreeToggleButton->setChecked(false);
-        sidebarToggleButton->show();
-        positionSidebarToggleButton();
     } else {
         ui->fileTreeGroupBox->show();
         if (QToolBar *tb = findChild<QToolBar*>("fileToolbar"))
             tb->show();
         if (fileTreeToggleButton)
             fileTreeToggleButton->setChecked(true);
-        sidebarToggleButton->hide();
     }
 }
 
-void MainWindow::positionSidebarToggleButton()
+QString MainWindow::findTerminal()
 {
-    if (!sidebarToggleButton || !ui->centralwidget)
-        return;
-    sidebarToggleButton->move(2, (ui->centralwidget->height() - sidebarToggleButton->height()) / 2);
+#ifdef Q_OS_WIN
+    return "cmd.exe";
+#elif defined(Q_OS_MAC)
+    return "open";
+#else
+    QStringList candidates = {"konsole", "gnome-terminal", "xfce4-terminal",
+                              "mate-terminal", "alacritty", "kitty", "xterm"};
+    for (const QString &term : candidates) {
+        if (!QStandardPaths::findExecutable(term).isEmpty())
+            return term;
+    }
+    return "xterm";
+#endif
 }
 
-void MainWindow::resizeEvent(QResizeEvent *event)
+void MainWindow::updateStatusBar()
 {
-    QMainWindow::resizeEvent(event);
-    if (sidebarToggleButton && sidebarToggleButton->isVisible())
-        positionSidebarToggleButton();
+    QPlainTextEdit *editor = getCurrentEditor();
+    if (editor) {
+        int line = editor->textCursor().blockNumber() + 1;
+        int column = editor->textCursor().positionInBlock() + 1;
+        ui->statusbar->showMessage(QString("Line %1, Column %2").arg(line).arg(column));
+    }
+}
+
+void MainWindow::updateTabModified(int index, bool modified)
+{
+    if (index < 0 || index >= openFiles.size())
+        return;
+    openFiles[index].modified = modified;
+    QString title = openFiles[index].fileName;
+    if (modified)
+        title = "*" + title;
+    ui->tabWidget->setTabText(index, title);
 }

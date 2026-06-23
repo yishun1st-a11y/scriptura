@@ -51,3 +51,16 @@ Automated builds are available for Linux, macOS, and Windows via GitHub Actions.
 ## License
 
 MIT License - see LICENSE file
+
+## Alpha Stage Checklist
+
+- [ ] Application packaging (AppImage / DMG / NSIS installer)
+- [ ] Project auto-discovery / recent projects on welcome screen
+- [ ] Open/Save file dialog native file format filters
+- [ ] Find/Replace (Ctrl+F / Ctrl+H) with regex support
+- [ ] Auto-save / crash recovery
+- [ ] Syntax highlighting usage/configuration
+- [ ] UX refinements (animations, keyboard shortcuts cheatsheet)
+- [ ] Runtime crash / minidump reporting
+- [ ] Confirm exit prompt
+- [ ] OS-level file association/desktop integration
