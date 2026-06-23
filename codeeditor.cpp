@@ -501,6 +501,7 @@ CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent)
     , lineNumberArea(new LineNumberArea(this))
     , syntaxHighlighter(new CodeHighlighter(document()))
+    , m_tabWidth(4)
 {
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
@@ -527,21 +528,35 @@ void CodeEditor::setDarkMode(bool dark)
 }
 
 void CodeEditor::setThemeColors(const QColor &keyword, const QColor &string, const QColor &comment,
-                               const QColor &number, const QColor &preprocessor, const QColor &tag,
-                               const QColor &attribute, const QColor &cssProperty,
-                               const QColor &variable, const QColor &function, const QColor &escape,
-                               const QColor &trailingSpace)
+                                const QColor &number, const QColor &preprocessor, const QColor &tag,
+                                const QColor &attribute, const QColor &cssProperty,
+                                const QColor &variable, const QColor &function, const QColor &escape,
+                                const QColor &trailingSpace)
 {
     syntaxHighlighter->setThemeColors(keyword, string, comment, number, preprocessor, tag,
                                        attribute, cssProperty, variable, function, escape, trailingSpace);
     highlightCurrentLine();
 }
+
+void CodeEditor::setTabWidth(int spaces)
+{
+    m_tabWidth = spaces;
+    QTextOption option = document()->defaultTextOption();
+    option.setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * m_tabWidth);
+    document()->setDefaultTextOption(option);
+}
+
+int CodeEditor::tabWidth() const
+{
+    return m_tabWidth;
+}
+
 void CodeEditor::changeEvent(QEvent *event)
 {
     QPlainTextEdit::changeEvent(event);
     if (event->type() == QEvent::FontChange) {
         QTextOption option = document()->defaultTextOption();
-        option.setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
+        option.setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * m_tabWidth);
         document()->setDefaultTextOption(option);
     }
 }

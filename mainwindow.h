@@ -63,6 +63,7 @@ private slots:
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
+    void on_sidebarToggleButton_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -72,6 +73,9 @@ private:
     QList<OpenFile> openFiles;
     QFileSystemModel *fileModel;
     QToolButton *goUpButton;
+    QToolButton *sidebarToggleButton;
+    QToolButton *fileTreeToggleButton;
+    QToolButton *terminalButton;
     QWidget *welcomeWidget;
     QStackedWidget *editorStack;
     bool darkMode;
@@ -83,6 +87,9 @@ private:
     void showWelcomeScreen();
     void showEditorInterface();
     void applyTheme(ThemeType theme);
+    void setSidebarCollapsed(bool collapsed);
+    void positionSidebarToggleButton();
+    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // MAINWINDOW_H

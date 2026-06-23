@@ -89,6 +89,8 @@ public:
                         const QColor &attribute, const QColor &cssProperty,
                         const QColor &variable, const QColor &function, const QColor &escape,
                         const QColor &trailingSpace = QColor());
+    void setTabWidth(int spaces);
+    int tabWidth() const;
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -108,6 +110,7 @@ private:
     QWidget *lineNumberArea;
     CodeHighlighter *syntaxHighlighter;
     bool m_showIndentGuides = true;
+    int m_tabWidth = 4;
 };
 
 class LineNumberArea : public QWidget

@@ -37,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , darkMode(false)
     , selectedTheme(ThemeDefaultLight)
+    , sidebarToggleButton(nullptr)
 {
     ui->setupUi(this);
 
@@ -44,7 +45,7 @@ MainWindow::MainWindow(QWidget *parent)
     int themeIndex = settings.value("theme/selected", ThemeDefaultLight).toInt();
     selectedTheme = static_cast<ThemeType>(themeIndex);
     applyTheme(selectedTheme);
-    
+
     QScreen *screen = QApplication::primaryScreen();
     if (screen) {
         QRect available = screen->availableGeometry();
@@ -66,7 +67,38 @@ MainWindow::MainWindow(QWidget *parent)
     connect(goUpButton, &QToolButton::clicked, this, &MainWindow::goUpClicked);
     toolbar->addWidget(goUpButton);
     
-connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
+    sidebarToggleButton = new QToolButton(ui->centralwidget);
+    sidebarToggleButton->setText("▶");
+    sidebarToggleButton->setToolTip(tr("Show Sidebar"));
+    sidebarToggleButton->setFixedSize(20, 60);
+    sidebarToggleButton->setStyleSheet("QToolButton { border: none; background: palette(button); padding: 2px; } QToolButton:hover { background: palette(highlight); }");
+    sidebarToggleButton->hide();
+    connect(sidebarToggleButton, &QToolButton::clicked, this, &MainWindow::on_sidebarToggleButton_clicked);
+
+    ui->iconSideBar->setFixedWidth(50);
+    ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
+
+    fileTreeToggleButton = findChild<QToolButton*>("fileTreeToggleButton");
+    fileTreeToggleButton->setToolTip(tr("Toggle File Tree"));
+    fileTreeToggleButton->setStyleSheet(
+        "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
+        "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
+    );
+
+    terminalButton = findChild<QToolButton*>("terminalButton");
+    terminalButton->setToolTip(tr("New Terminal"));
+    terminalButton->setStyleSheet(
+        "QToolButton { border: none; background: transparent; font-size: 16px; font-family: monospace; padding: 4px; }"
+        "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
+    );
+
+    connect(fileTreeToggleButton, &QToolButton::clicked, this, [this](bool checked) {
+        Q_UNUSED(checked);
+        setSidebarCollapsed(!fileTreeToggleButton->isChecked());
+    });
+    connect(terminalButton, &QToolButton::clicked, this, &MainWindow::on_action_new_window_triggered);
+    
+    connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
 
     ui->tabWidget->clear();
     ui->tabWidget->setTabsClosable(true);
@@ -80,6 +112,8 @@ connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeVie
     editorStack->addWidget(ui->tabWidget);
     ui->editorLayout->addWidget(editorStack);
     showWelcomeScreen();
+
+    setSidebarCollapsed(settings.value("ui/sidebarCollapsed", true).toBool());
 }
 
 MainWindow::~MainWindow()
@@ -382,6 +416,11 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         QSettings settings;
         QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
         editor->setFont(savedFont);
+        int savedTabWidth = settings.value("editor/tabWidth", editor->tabWidth()).toInt();
+        editor->setTabWidth(savedTabWidth);
+        int savedEditorWidth = settings.value("editor/width", 0).toInt();
+        if (savedEditorWidth > 0)
+            editor->setMinimumWidth(savedEditorWidth);
         editor->setPlainText(content);
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
         
@@ -469,46 +508,84 @@ void MainWindow::on_action_about_triggered()
 
 void MainWindow::on_action_editor_settings_triggered()
 {
+    QDialog *dialog = new QDialog(this);
+    dialog->setWindowTitle(tr("Editor Settings"));
+    dialog->resize(400, 300);
+
+    QScreen *screen = QApplication::primaryScreen();
+    if (screen) {
+        QRect screenGeometry = screen->availableGeometry();
+        int x = (screenGeometry.width() - dialog->width()) / 2;
+        int y = (screenGeometry.height() - dialog->height()) / 2;
+        dialog->move(x, y);
+    }
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+
     CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->currentWidget());
-    if (!editor)
-        return;
-
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Editor Settings"));
-
-    QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
 
     QHBoxLayout *fontLayout = new QHBoxLayout();
-    QLabel *fontLabel = new QLabel(tr("Font:"), &dialog);
-    QFontComboBox *fontCombo = new QFontComboBox(&dialog);
+    QLabel *fontLabel = new QLabel(tr("Font:"), dialog);
+    QFontComboBox *fontCombo = new QFontComboBox(dialog);
     fontCombo->setFontFilters(QFontComboBox::ScalableFonts);
-    fontCombo->setCurrentFont(editor->font());
+    if (editor) fontCombo->setCurrentFont(editor->font());
     fontLayout->addWidget(fontLabel);
     fontLayout->addWidget(fontCombo);
     mainLayout->addLayout(fontLayout);
 
     QHBoxLayout *sizeLayout = new QHBoxLayout();
-    QLabel *sizeLabel = new QLabel(tr("Size:"), &dialog);
-    QSpinBox *sizeSpin = new QSpinBox(&dialog);
-    sizeSpin->setRange(8, 48);
-    sizeSpin->setValue(editor->font().pointSize());
+    QLabel *sizeLabel = new QLabel(tr("Size:"), dialog);
+    QSpinBox *sizeSpin = new QSpinBox(dialog);
+    sizeSpin->setRange(8, 72);
+    if (editor) sizeSpin->setValue(editor->font().pointSize());
     sizeLayout->addWidget(sizeLabel);
     sizeLayout->addWidget(sizeSpin);
     sizeLayout->addStretch();
     mainLayout->addLayout(sizeLayout);
 
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    QHBoxLayout *tabLayout = new QHBoxLayout();
+    QLabel *tabLabel = new QLabel(tr("Tab Width:"), dialog);
+    QSpinBox *tabSpin = new QSpinBox(dialog);
+    tabSpin->setRange(1, 16);
+    if (editor) tabSpin->setValue(editor->tabWidth());
+    tabLayout->addWidget(tabLabel);
+    tabLayout->addWidget(tabSpin);
+    tabLayout->addStretch();
+    mainLayout->addLayout(tabLayout);
+
+    QHBoxLayout *widgetSizeLayout = new QHBoxLayout();
+    QLabel *widgetSizeLabel = new QLabel(tr("Editor Width:"), dialog);
+    QSpinBox *widgetSizeSpin = new QSpinBox(dialog);
+    widgetSizeSpin->setRange(200, 2000);
+    widgetSizeSpin->setSuffix(" px");
+    if (editor) widgetSizeSpin->setValue(editor->minimumWidth());
+    widgetSizeLayout->addWidget(widgetSizeLabel);
+    widgetSizeLayout->addWidget(widgetSizeSpin);
+    widgetSizeLayout->addStretch();
+    mainLayout->addLayout(widgetSizeLayout);
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
     mainLayout->addWidget(buttonBox);
 
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
 
-    if (dialog.exec() == QDialog::Accepted) {
-        QFont font = fontCombo->currentFont();
-        font.setPointSize(sizeSpin->value());
-        editor->setFont(font);
+    if (dialog->exec() == QDialog::Accepted) {
         QSettings settings;
-        settings.setValue("editor/font", font);
+
+        if (editor) {
+            QFont font = fontCombo->currentFont();
+            font.setPointSize(sizeSpin->value());
+            editor->setFont(font);
+            settings.setValue("editor/font", font);
+
+            editor->setTabWidth(tabSpin->value());
+            settings.setValue("editor/tabWidth", tabSpin->value());
+
+            int editorWidth = widgetSizeSpin->value();
+            editor->setMinimumWidth(editorWidth);
+            settings.setValue("editor/width", editorWidth);
+        }
     }
 }
 
@@ -822,4 +899,46 @@ void MainWindow::on_action_license_triggered()
         "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
         "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n"
         "SOFTWARE."));
+}
+
+void MainWindow::on_sidebarToggleButton_clicked()
+{
+    setSidebarCollapsed(false);
+}
+
+void MainWindow::setSidebarCollapsed(bool collapsed)
+{
+    QSettings settings;
+    settings.setValue("ui/sidebarCollapsed", collapsed);
+
+    if (collapsed) {
+        ui->fileTreeGroupBox->hide();
+        if (QToolBar *tb = findChild<QToolBar*>("fileToolbar"))
+            tb->hide();
+        if (fileTreeToggleButton)
+            fileTreeToggleButton->setChecked(false);
+        sidebarToggleButton->show();
+        positionSidebarToggleButton();
+    } else {
+        ui->fileTreeGroupBox->show();
+        if (QToolBar *tb = findChild<QToolBar*>("fileToolbar"))
+            tb->show();
+        if (fileTreeToggleButton)
+            fileTreeToggleButton->setChecked(true);
+        sidebarToggleButton->hide();
+    }
+}
+
+void MainWindow::positionSidebarToggleButton()
+{
+    if (!sidebarToggleButton || !ui->centralwidget)
+        return;
+    sidebarToggleButton->move(2, (ui->centralwidget->height() - sidebarToggleButton->height()) / 2);
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (sidebarToggleButton && sidebarToggleButton->isVisible())
+        positionSidebarToggleButton();
 }

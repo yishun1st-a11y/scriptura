@@ -13,33 +13,69 @@
   <property name="windowTitle">
    <string>Scriptura</string>
   </property>
-  <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,1">
-    <item>
-     <layout class="QVBoxLayout" name="sidebarLayout">
-      <item>
-       <widget class="QGroupBox" name="fileTreeGroupBox">
-        <property name="title">
-         <string>Project Files</string>
-        </property>
-        <layout class="QVBoxLayout" name="verticalLayout">
-         <item>
-          <widget class="QTreeView" name="fileTreeView"/>
-         </item>
-        </layout>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <layout class="QVBoxLayout" name="editorLayout">
-      <item>
-       <widget class="QTabWidget" name="tabWidget"/>
-      </item>
-     </layout>
-    </item>
-   </layout>
-  </widget>
+   <widget class="QWidget" name="centralwidget">
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,1">
+     <item>
+      <widget class="QWidget" name="iconSideBar">
+       <layout class="QVBoxLayout" name="iconSidebarLayout">
+        <item>
+         <widget class="QToolButton" name="fileTreeToggleButton">
+          <property name="text">
+           <string>📁</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="terminalButton">
+          <property name="text">
+           <string>>$</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="iconSidebarSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="sidebarLayout">
+       <item>
+        <widget class="QGroupBox" name="fileTreeGroupBox">
+         <property name="title">
+          <string>Project Files</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QTreeView" name="fileTreeView"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="editorLayout">
+       <item>
+        <widget class="QTabWidget" name="tabWidget"/>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
