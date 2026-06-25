@@ -38,8 +38,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , darkMode(false)
-    , selectedTheme(ThemeDefaultLight)
+    , selectedTheme(ThemeColorFamily::Default, ThemeMode::Light)
     , autoSaveTimer(new QTimer(this))
 {
     ui->setupUi(this);
@@ -47,8 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     loadRecentProjects();
 
     QSettings settings;
-    int themeIndex = settings.value("theme/selected", ThemeDefaultLight).toInt();
-    selectedTheme = static_cast<ThemeType>(themeIndex);
+    int legacyTheme = settings.value("theme/selected", 0).toInt();
+    selectedTheme = themeFromLegacyInt(legacyTheme);
     applyTheme(selectedTheme);
 
     QScreen *screen = QApplication::primaryScreen();
@@ -763,205 +762,15 @@ void MainWindow::on_action_editor_settings_triggered()
     }
 }
 
-void MainWindow::applyTheme(ThemeType theme)
+void MainWindow::applyTheme(const Theme &theme)
 {
-    QPalette palette;
-    bool isDark = false;
-    QColor keyword, string, comment, number, preprocessor, tag, attribute, cssProperty, variable, function, escape;
+    QPalette palette = buildBasePalette(theme.family, theme.mode);
+    bool isDark = theme.isDark();
+    auto syntax = baseSyntaxColors(theme.mode);
 
-    switch (theme) {
-    case ThemeBlueLight:
-        palette.setColor(QPalette::Window, QColor(240, 248, 255));
-        palette.setColor(QPalette::WindowText, Qt::black);
-        palette.setColor(QPalette::Base, Qt::white);
-        palette.setColor(QPalette::AlternateBase, QColor(230, 240, 250));
-        palette.setColor(QPalette::Text, Qt::black);
-        palette.setColor(QPalette::Button, QColor(240, 248, 255));
-        palette.setColor(QPalette::ButtonText, Qt::black);
-        palette.setColor(QPalette::Highlight, QColor(100, 150, 255));
-        palette.setColor(QPalette::HighlightedText, Qt::black);
-        isDark = false;
-        keyword = QColor("#1d4ed8");
-        string = QColor("#15803d");
-        comment = QColor("#64748b");
-        number = QColor("#9333ea");
-        preprocessor = QColor("#7e22ce");
-        tag = QColor("#2563eb");
-        attribute = QColor("#a16207");
-        cssProperty = QColor("#0f766e");
-        variable = QColor("#0369a1");
-        function = QColor("#d97706");
-        escape = QColor("#0e7490");
-        break;
-
-    case ThemeBlueDark:
-        palette.setColor(QPalette::Window, QColor(25, 35, 50));
-        palette.setColor(QPalette::WindowText, Qt::white);
-        palette.setColor(QPalette::Base, QColor(15, 25, 35));
-        palette.setColor(QPalette::AlternateBase, QColor(35, 45, 55));
-        palette.setColor(QPalette::Text, Qt::white);
-        palette.setColor(QPalette::Button, QColor(25, 35, 50));
-        palette.setColor(QPalette::ButtonText, Qt::white);
-        palette.setColor(QPalette::Highlight, QColor(100, 150, 255));
-        palette.setColor(QPalette::HighlightedText, Qt::white);
-        isDark = true;
-        keyword = QColor("#93c5fd");
-        string = QColor("#86efac");
-        comment = QColor("#94a3b8");
-        number = QColor("#c084fc");
-        preprocessor = QColor("#a855f7");
-        tag = QColor("#60a5fa");
-        attribute = QColor("#fbbf24");
-        cssProperty = QColor("#2dd4bf");
-        variable = QColor("#38bdf8");
-        function = QColor("#f97316");
-        escape = QColor("#22d3ee");
-        break;
-
-    case ThemeGreenLight:
-        palette.setColor(QPalette::Window, QColor(240, 255, 240));
-        palette.setColor(QPalette::WindowText, Qt::black);
-        palette.setColor(QPalette::Base, Qt::white);
-        palette.setColor(QPalette::AlternateBase, QColor(230, 250, 230));
-        palette.setColor(QPalette::Text, Qt::black);
-        palette.setColor(QPalette::Button, QColor(240, 255, 240));
-        palette.setColor(QPalette::ButtonText, Qt::black);
-        palette.setColor(QPalette::Highlight, QColor(100, 200, 100));
-        palette.setColor(QPalette::HighlightedText, Qt::black);
-        isDark = false;
-        keyword = QColor("#16a34a");
-        string = QColor("#15803d");
-        comment = QColor("#64748b");
-        number = QColor("#9333ea");
-        preprocessor = QColor("#7e22ce");
-        tag = QColor("#2563eb");
-        attribute = QColor("#a16207");
-        cssProperty = QColor("#0f766e");
-        variable = QColor("#0369a1");
-        function = QColor("#d97706");
-        escape = QColor("#0e7490");
-        break;
-
-    case ThemeGreenDark:
-        palette.setColor(QPalette::Window, QColor(25, 45, 30));
-        palette.setColor(QPalette::WindowText, Qt::white);
-        palette.setColor(QPalette::Base, QColor(15, 35, 20));
-        palette.setColor(QPalette::AlternateBase, QColor(35, 55, 40));
-        palette.setColor(QPalette::Text, Qt::white);
-        palette.setColor(QPalette::Button, QColor(25, 45, 30));
-        palette.setColor(QPalette::ButtonText, Qt::white);
-        palette.setColor(QPalette::Highlight, QColor(100, 200, 100));
-        palette.setColor(QPalette::HighlightedText, Qt::white);
-        isDark = true;
-        keyword = QColor("#86efac");
-        string = QColor("#4ade80");
-        comment = QColor("#94a3b8");
-        number = QColor("#c084fc");
-        preprocessor = QColor("#a855f7");
-        tag = QColor("#60a5fa");
-        attribute = QColor("#fbbf24");
-        cssProperty = QColor("#2dd4bf");
-        variable = QColor("#38bdf8");
-        function = QColor("#f97316");
-        escape = QColor("#22d3ee");
-        break;
-
-    case ThemeHighContrastLight:
-        palette.setColor(QPalette::Window, Qt::white);
-        palette.setColor(QPalette::WindowText, Qt::black);
-        palette.setColor(QPalette::Base, Qt::white);
-        palette.setColor(QPalette::AlternateBase, QColor(240, 240, 240));
-        palette.setColor(QPalette::Text, Qt::black);
-        palette.setColor(QPalette::Button, Qt::white);
-        palette.setColor(QPalette::ButtonText, Qt::black);
-        palette.setColor(QPalette::Highlight, Qt::black);
-        palette.setColor(QPalette::HighlightedText, Qt::white);
-        isDark = false;
-        keyword = QColor("#0000cd");
-        string = QColor("#006400");
-        comment = QColor("#696969");
-        number = QColor("#800080");
-        preprocessor = QColor("#800080");
-        tag = QColor("#0000cd");
-        attribute = QColor("#8b4513");
-        cssProperty = QColor("#006400");
-        variable = QColor("#0000cd");
-        function = QColor("#ff8c00");
-        escape = QColor("#006400");
-        break;
-
-    case ThemeHighContrastDark:
-        palette.setColor(QPalette::Window, Qt::black);
-        palette.setColor(QPalette::WindowText, Qt::white);
-        palette.setColor(QPalette::Base, QColor(20, 20, 20));
-        palette.setColor(QPalette::AlternateBase, QColor(30, 30, 30));
-        palette.setColor(QPalette::Text, Qt::white);
-        palette.setColor(QPalette::Button, Qt::black);
-        palette.setColor(QPalette::ButtonText, Qt::white);
-        palette.setColor(QPalette::Highlight, Qt::white);
-        palette.setColor(QPalette::HighlightedText, Qt::black);
-        isDark = true;
-        keyword = QColor("#6495ed");
-        string = QColor("#90ee90");
-        comment = QColor("#d3d3d3");
-        number = QColor("#dda0dd");
-        preprocessor = QColor("#dda0dd");
-        tag = QColor("#6495ed");
-        attribute = QColor("#daa520");
-        cssProperty = QColor("#90ee90");
-        variable = QColor("#6495ed");
-        function = QColor("#ffa500");
-        escape = QColor("#90ee90");
-        break;
-
-    case ThemeDefaultLight:
-        isDark = false;
-        keyword = QColor("#1d4ed8");
-        string = QColor("#15803d");
-        comment = QColor("#64748b");
-        number = QColor("#9333ea");
-        preprocessor = QColor("#7e22ce");
-        tag = QColor("#2563eb");
-        attribute = QColor("#a16207");
-        cssProperty = QColor("#0f766e");
-        variable = QColor("#0369a1");
-        function = QColor("#d97706");
-        escape = QColor("#0e7490");
-        palette = QApplication::style()->standardPalette();
-        break;
-
-    case ThemeDefaultDark:
-    default:
-        palette.setColor(QPalette::Window, QColor(53, 53, 53));
-        palette.setColor(QPalette::WindowText, Qt::white);
-        palette.setColor(QPalette::Base, QColor(25, 25, 25));
-        palette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
-        palette.setColor(QPalette::ToolTipBase, Qt::white);
-        palette.setColor(QPalette::ToolTipText, Qt::white);
-        palette.setColor(QPalette::Text, Qt::white);
-        palette.setColor(QPalette::Button, QColor(53, 53, 53));
-        palette.setColor(QPalette::ButtonText, Qt::white);
-        palette.setColor(QPalette::BrightText, Qt::red);
-        palette.setColor(QPalette::Link, QColor(42, 130, 218));
-        palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-        palette.setColor(QPalette::HighlightedText, Qt::white);
-        palette.setColor(QPalette::Light, QColor(70, 70, 70));
-        palette.setColor(QPalette::Mid, QColor(45, 45, 45));
-        palette.setColor(QPalette::Dark, QColor(35, 35, 35));
-        palette.setColor(QPalette::Midlight, QColor(60, 60, 60));
-        isDark = true;
-        keyword = QColor("#93c5fd");
-        string = QColor("#86efac");
-        comment = QColor("#94a3b8");
-        number = QColor("#c084fc");
-        preprocessor = QColor("#a855f7");
-        tag = QColor("#60a5fa");
-        attribute = QColor("#fbbf24");
-        cssProperty = QColor("#2dd4bf");
-        variable = QColor("#38bdf8");
-        function = QColor("#f97316");
-        escape = QColor("#22d3ee");
-        break;
+    if (theme.features.testFlag(ThemeFeature::HighContrast)) {
+        applyHighContrastPalette(palette, theme.family, theme.mode);
+        applyHighContrastSyntax(syntax, theme.family, theme.mode);
     }
 
     QApplication::setStyle("Fusion");
@@ -977,65 +786,83 @@ void MainWindow::applyTheme(ThemeType theme)
             editor->viewport()->setAutoFillBackground(true);
             editor->setDarkMode(isDark);
             QColor trailingBg = isDark ? QColor("#7f1d1d") : QColor("#fecaca");
-            editor->setThemeColors(keyword, string, comment, number, preprocessor, tag,
-                                   attribute, cssProperty, variable, function, escape, trailingBg);
+            editor->setThemeColors(syntax.keyword, syntax.string, syntax.comment, syntax.number,
+                                   syntax.preprocessor, syntax.tag, syntax.attribute,
+                                   syntax.cssProperty, syntax.variable, syntax.function,
+                                   syntax.escape, trailingBg);
         }
     }
 
     QSettings settings;
-    settings.setValue("theme/selected", static_cast<int>(theme));
+    settings.setValue("theme/selected", themeToLegacyInt(theme));
 }
 
 void MainWindow::on_action_theme_triggered()
 {
     QDialog *dialog = new QDialog(this);
     dialog->setWindowTitle(tr("Theme Selection"));
-    dialog->resize(400, 300);
+    dialog->resize(500, 350);
     dialog->setModal(true);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 
-    QScrollArea *scrollArea = new QScrollArea(dialog);
-    scrollArea->setWidgetResizable(true);
-
-    QWidget *scrollContent = new QWidget();
-    QVBoxLayout *scrollLayout = new QVBoxLayout(scrollContent);
-
-    QButtonGroup *themeGroup = new QButtonGroup(scrollContent);
-
-    struct ThemeInfo {
+    struct FamilyEntry {
+        ThemeColorFamily family;
         QString name;
-        ThemeType type;
-        QColor bgColor, textColor;
+        QColor lightBg, darkBg;
+        QColor lightText, darkText;
     };
 
-    ThemeInfo themes[] = {
-        {"Default Light", ThemeDefaultLight, QColor(240, 240, 240), Qt::black},
-        {"Default Dark", ThemeDefaultDark, QColor(45, 45, 45), Qt::white},
-        {"Blue Light", ThemeBlueLight, QColor(240, 248, 255), Qt::black},
-        {"Blue Dark", ThemeBlueDark, QColor(25, 35, 50), Qt::white},
-        {"Green Light", ThemeGreenLight, QColor(240, 255, 240), Qt::black},
-        {"Green Dark", ThemeGreenDark, QColor(25, 45, 30), Qt::white},
-        {"High Contrast Light", ThemeHighContrastLight, Qt::white, Qt::black},
-        {"High Contrast Dark", ThemeHighContrastDark, Qt::black, Qt::white}
+    FamilyEntry families[] = {
+        {ThemeColorFamily::Default, "Default", QColor(240,240,240), QColor(45,45,45), Qt::black, Qt::white},
+        {ThemeColorFamily::Blue, "Blue", QColor(240,248,255), QColor(25,35,50), Qt::black, Qt::white},
+        {ThemeColorFamily::Green, "Green", QColor(240,255,240), QColor(25,45,30), Qt::black, Qt::white},
+        {ThemeColorFamily::Red, "Red", QColor(255,245,245), QColor(45,25,25), Qt::black, Qt::white},
+        {ThemeColorFamily::Yellow, "Yellow", QColor(255,255,240), QColor(45,45,25), Qt::black, Qt::white},
+        {ThemeColorFamily::Brown, "Brown", QColor(255,250,240), QColor(40,30,20), Qt::black, Qt::white},
+        {ThemeColorFamily::Cyan, "Cyan", QColor(240,255,255), QColor(25,45,45), Qt::black, Qt::white},
+        {ThemeColorFamily::Violet, "Violet", QColor(245,240,255), QColor(35,25,50), Qt::black, Qt::white}
     };
 
-    for (const ThemeInfo &themeInfo : themes) {
-        QPushButton *btn = new QPushButton(themeInfo.name, scrollContent);
+    QGroupBox *familyGroup = new QGroupBox(tr("Color Family"), dialog);
+    QGridLayout *familyGrid = new QGridLayout(familyGroup);
+    QButtonGroup *familyBtnGroup = new QButtonGroup(familyGroup);
+
+    int familySelected = static_cast<int>(selectedTheme.family);
+    for (int i = 0; i < 8; ++i) {
+        QPushButton *btn = new QPushButton(families[i].name, familyGroup);
         btn->setCheckable(true);
-        btn->setProperty("themeType", static_cast<int>(themeInfo.type));
-        btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 10px;")
-                          .arg(themeInfo.bgColor.name()).arg(themeInfo.textColor.name()));
-        scrollLayout->addWidget(btn);
-        themeGroup->addButton(btn);
+        btn->setProperty("familyIdx", i);
+        updateFamilyButtonPreview(btn, families[i].family, selectedTheme.mode, selectedTheme.features);
+        familyGrid->addWidget(btn, i / 4, i % 4);
+        familyBtnGroup->addButton(btn);
+        if (i == familySelected)
+            btn->setChecked(true);
     }
 
-    for (QAbstractButton *btn : themeGroup->buttons()) {
-        btn->setChecked(btn->property("themeType").toInt() == static_cast<int>(selectedTheme));
-    }
+    QGroupBox *modeGroup = new QGroupBox(tr("Mode"), dialog);
+    QHBoxLayout *modeLayout = new QHBoxLayout(modeGroup);
+    QRadioButton *lightRadio = new QRadioButton(tr("Light"), modeGroup);
+    QRadioButton *darkRadio = new QRadioButton(tr("Dark"), modeGroup);
+    QButtonGroup *modeBtnGroup = new QButtonGroup(modeGroup);
+    modeBtnGroup->addButton(lightRadio);
+    modeBtnGroup->addButton(darkRadio);
+    modeLayout->addWidget(lightRadio);
+    modeLayout->addWidget(darkRadio);
+    if (selectedTheme.mode == ThemeMode::Light)
+        lightRadio->setChecked(true);
+    else
+        darkRadio->setChecked(true);
 
-    scrollArea->setWidget(scrollContent);
-    mainLayout->addWidget(scrollArea);
+    QGroupBox *featuresGroup = new QGroupBox(tr("Features"), dialog);
+    QVBoxLayout *featuresLayout = new QVBoxLayout(featuresGroup);
+    QCheckBox *hcCheckbox = new QCheckBox(tr("High Contrast"), featuresGroup);
+    hcCheckbox->setChecked(selectedTheme.features.testFlag(ThemeFeature::HighContrast));
+    featuresLayout->addWidget(hcCheckbox);
+
+    mainLayout->addWidget(familyGroup);
+    mainLayout->addWidget(modeGroup);
+    mainLayout->addWidget(featuresGroup);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
@@ -1043,17 +870,37 @@ void MainWindow::on_action_theme_triggered()
     buttonLayout->addWidget(applyButton);
     mainLayout->addLayout(buttonLayout);
 
-    ThemeType chosenTheme = selectedTheme;
+    Theme currentTheme = selectedTheme;
 
-    connect(themeGroup, &QButtonGroup::buttonClicked, [this, &chosenTheme](QAbstractButton *button) {
-        chosenTheme = static_cast<ThemeType>(button->property("themeType").toInt());
+    auto refreshFamilyPreviews = [&]() {
+        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        ThemeFeatures features;
+        if (hcCheckbox->isChecked())
+            features |= ThemeFeature::HighContrast;
+        for (int i = 0; i < 8; ++i) {
+            QAbstractButton *abtn = familyBtnGroup->button(i);
+            QPushButton *btn = qobject_cast<QPushButton*>(abtn);
+            if (btn)
+                updateFamilyButtonPreview(btn, families[i].family, mode, features);
+        }
+        currentTheme.mode = mode;
+        currentTheme.features = features;
+    };
+
+    connect(familyBtnGroup, &QButtonGroup::buttonClicked, [&](QAbstractButton *button) {
+        currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
+        currentTheme.mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        currentTheme.features = hcCheckbox->isChecked() ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures();
     });
+
+    connect(lightRadio, &QRadioButton::toggled, refreshFamilyPreviews);
+    connect(hcCheckbox, &QCheckBox::toggled, refreshFamilyPreviews);
 
     connect(applyButton, &QPushButton::clicked, dialog, &QDialog::accept);
 
     int result = dialog->exec();
-    if (result == QDialog::Accepted && chosenTheme != selectedTheme) {
-        selectedTheme = chosenTheme;
+    if (result == QDialog::Accepted && currentTheme != selectedTheme) {
+        selectedTheme = currentTheme;
         applyTheme(selectedTheme);
     }
 }
@@ -1278,6 +1125,306 @@ QString MainWindow::findTerminal()
 #endif
 }
 
+void MainWindow::updateFamilyButtonPreview(QPushButton *btn, ThemeColorFamily family, ThemeMode mode, ThemeFeatures features)
+{
+    QPalette p = buildBasePalette(family, mode);
+    if (features.testFlag(ThemeFeature::HighContrast))
+        applyHighContrastPalette(p, family, mode);
+
+    bool isDark = (mode == ThemeMode::Dark);
+    QColor bg = p.color(QPalette::Window);
+    QColor accent = highContrastAccentColor(family, mode);
+
+    btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 8px; font-weight: bold; border: 2px solid %2;")
+                       .arg(bg.name()).arg(accent.name()));
+}
+
+QPalette MainWindow::buildBasePalette(ThemeColorFamily family, ThemeMode mode)
+{
+    QPalette p;
+    bool isDark = (mode == ThemeMode::Dark);
+
+    auto s = [&](QPalette::ColorRole role, const QColor &c) { p.setColor(role, c); };
+
+    switch (family) {
+    case ThemeColorFamily::Default:
+        if (isDark) {
+            s(QPalette::Window, QColor(53, 53, 53));
+            s(QPalette::WindowText, Qt::white);
+            s(QPalette::Base, QColor(25, 25, 25));
+            s(QPalette::AlternateBase, QColor(53, 53, 53));
+            s(QPalette::ToolTipBase, Qt::white);
+            s(QPalette::ToolTipText, Qt::white);
+            s(QPalette::Text, Qt::white);
+            s(QPalette::Button, QColor(53, 53, 53));
+            s(QPalette::ButtonText, Qt::white);
+            s(QPalette::BrightText, Qt::red);
+            s(QPalette::Link, QColor(42, 130, 218));
+            s(QPalette::Highlight, QColor(42, 130, 218));
+            s(QPalette::HighlightedText, Qt::white);
+            s(QPalette::Light, QColor(70, 70, 70));
+            s(QPalette::Mid, QColor(45, 45, 45));
+            s(QPalette::Dark, QColor(35, 35, 35));
+            s(QPalette::Midlight, QColor(60, 60, 60));
+        } else {
+            p = QApplication::style()->standardPalette();
+        }
+        return p;
+
+    case ThemeColorFamily::Blue:
+        if (isDark) {
+            s(QPalette::Window, QColor(25, 35, 50));
+            s(QPalette::Base, QColor(15, 25, 35));
+            s(QPalette::AlternateBase, QColor(35, 45, 55));
+            s(QPalette::Button, QColor(25, 35, 50));
+            s(QPalette::Highlight, QColor(100, 150, 255));
+        } else {
+            s(QPalette::Window, QColor(240, 248, 255));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(230, 240, 250));
+            s(QPalette::Button, QColor(240, 248, 255));
+            s(QPalette::Highlight, QColor(100, 150, 255));
+        }
+        break;
+
+    case ThemeColorFamily::Green:
+        if (isDark) {
+            s(QPalette::Window, QColor(25, 45, 30));
+            s(QPalette::Base, QColor(15, 35, 20));
+            s(QPalette::AlternateBase, QColor(35, 55, 40));
+            s(QPalette::Button, QColor(25, 45, 30));
+            s(QPalette::Highlight, QColor(100, 200, 100));
+        } else {
+            s(QPalette::Window, QColor(240, 255, 240));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(230, 250, 230));
+            s(QPalette::Button, QColor(240, 255, 240));
+            s(QPalette::Highlight, QColor(100, 200, 100));
+        }
+        break;
+
+    case ThemeColorFamily::Red:
+        if (isDark) {
+            s(QPalette::Window, QColor(45, 25, 25));
+            s(QPalette::Base, QColor(35, 15, 15));
+            s(QPalette::AlternateBase, QColor(55, 35, 35));
+            s(QPalette::Button, QColor(45, 25, 25));
+            s(QPalette::Highlight, QColor(255, 100, 100));
+        } else {
+            s(QPalette::Window, QColor(255, 245, 245));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(255, 235, 235));
+            s(QPalette::Button, QColor(255, 245, 245));
+            s(QPalette::Highlight, QColor(255, 100, 100));
+        }
+        break;
+
+    case ThemeColorFamily::Yellow:
+        if (isDark) {
+            s(QPalette::Window, QColor(45, 45, 25));
+            s(QPalette::Base, QColor(35, 35, 15));
+            s(QPalette::AlternateBase, QColor(55, 55, 35));
+            s(QPalette::Button, QColor(45, 45, 25));
+            s(QPalette::Highlight, QColor(200, 200, 50));
+        } else {
+            s(QPalette::Window, QColor(255, 255, 240));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(255, 250, 220));
+            s(QPalette::Button, QColor(255, 255, 240));
+            s(QPalette::Highlight, QColor(200, 200, 50));
+        }
+        break;
+
+    case ThemeColorFamily::Brown:
+        if (isDark) {
+            s(QPalette::Window, QColor(40, 30, 20));
+            s(QPalette::Base, QColor(30, 20, 10));
+            s(QPalette::AlternateBase, QColor(50, 40, 30));
+            s(QPalette::Button, QColor(40, 30, 20));
+            s(QPalette::Highlight, QColor(180, 130, 80));
+        } else {
+            s(QPalette::Window, QColor(255, 250, 240));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(250, 240, 220));
+            s(QPalette::Button, QColor(255, 250, 240));
+            s(QPalette::Highlight, QColor(180, 130, 80));
+        }
+        break;
+
+    case ThemeColorFamily::Cyan:
+        if (isDark) {
+            s(QPalette::Window, QColor(25, 45, 45));
+            s(QPalette::Base, QColor(15, 35, 35));
+            s(QPalette::AlternateBase, QColor(35, 55, 55));
+            s(QPalette::Button, QColor(25, 45, 45));
+            s(QPalette::Highlight, QColor(50, 180, 200));
+        } else {
+            s(QPalette::Window, QColor(240, 255, 255));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(220, 250, 250));
+            s(QPalette::Button, QColor(240, 255, 255));
+            s(QPalette::Highlight, QColor(50, 180, 200));
+        }
+        break;
+
+    case ThemeColorFamily::Violet:
+        if (isDark) {
+            s(QPalette::Window, QColor(35, 25, 50));
+            s(QPalette::Base, QColor(25, 15, 40));
+            s(QPalette::AlternateBase, QColor(45, 35, 60));
+            s(QPalette::Button, QColor(35, 25, 50));
+            s(QPalette::Highlight, QColor(150, 100, 220));
+        } else {
+            s(QPalette::Window, QColor(245, 240, 255));
+            s(QPalette::Base, Qt::white);
+            s(QPalette::AlternateBase, QColor(235, 225, 245));
+            s(QPalette::Button, QColor(245, 240, 255));
+            s(QPalette::Highlight, QColor(150, 100, 220));
+        }
+        break;
+    }
+
+    QColor text = isDark ? Qt::white : Qt::black;
+    QColor btnText = isDark ? Qt::white : Qt::black;
+    QColor hlText = isDark ? Qt::white : Qt::black;
+
+    s(QPalette::WindowText, text);
+    s(QPalette::Text, text);
+    s(QPalette::ButtonText, btnText);
+    s(QPalette::HighlightedText, hlText);
+
+    return p;
+}
+
+QColor MainWindow::highContrastAccentColor(ThemeColorFamily family, ThemeMode mode)
+{
+    bool isDark = (mode == ThemeMode::Dark);
+    switch (family) {
+    case ThemeColorFamily::Default:
+        return isDark ? QColor("#4d94ff") : QColor("#0055dd");
+    case ThemeColorFamily::Blue:
+        return isDark ? QColor("#80bfff") : QColor("#0044aa");
+    case ThemeColorFamily::Green:
+        return isDark ? QColor("#33ff99") : QColor("#006633");
+    case ThemeColorFamily::Red:
+        return isDark ? QColor("#ff5555") : QColor("#cc0000");
+    case ThemeColorFamily::Yellow:
+        return isDark ? QColor("#ffdd00") : QColor("#997a00");
+    case ThemeColorFamily::Brown:
+        return isDark ? QColor("#ddaa55") : QColor("#885522");
+    case ThemeColorFamily::Cyan:
+        return isDark ? QColor("#00eeff") : QColor("#008899");
+    case ThemeColorFamily::Violet:
+        return isDark ? QColor("#bb88ff") : QColor("#6633cc");
+    }
+    return isDark ? QColor("#4d94ff") : QColor("#0055dd");
+}
+
+void MainWindow::applyHighContrastPalette(QPalette &p, ThemeColorFamily family, ThemeMode mode)
+{
+    bool isDark = (mode == ThemeMode::Dark);
+    QColor accent = highContrastAccentColor(family, mode);
+
+    if (isDark) {
+        p.setColor(QPalette::Window, Qt::black);
+        p.setColor(QPalette::WindowText, accent);
+        p.setColor(QPalette::Base, QColor(20, 20, 20));
+        p.setColor(QPalette::AlternateBase, QColor(30, 30, 30));
+        p.setColor(QPalette::Text, accent);
+        p.setColor(QPalette::Button, Qt::black);
+        p.setColor(QPalette::ButtonText, accent);
+        p.setColor(QPalette::Highlight, accent);
+        p.setColor(QPalette::HighlightedText, Qt::black);
+        p.setColor(QPalette::Link, accent);
+    } else {
+        p.setColor(QPalette::Window, Qt::white);
+        p.setColor(QPalette::WindowText, accent);
+        p.setColor(QPalette::Base, Qt::white);
+        p.setColor(QPalette::AlternateBase, QColor(240, 240, 240));
+        p.setColor(QPalette::Text, accent);
+        p.setColor(QPalette::Button, Qt::white);
+        p.setColor(QPalette::ButtonText, accent);
+        p.setColor(QPalette::Highlight, accent);
+        p.setColor(QPalette::HighlightedText, Qt::white);
+        p.setColor(QPalette::Link, accent);
+    }
+}
+
+MainWindow::SyntaxColors MainWindow::baseSyntaxColors(ThemeMode mode)
+{
+    SyntaxColors c;
+    if (mode == ThemeMode::Dark) {
+        c.keyword = QColor("#93c5fd");
+        c.string = QColor("#86efac");
+        c.comment = QColor("#94a3b8");
+        c.number = QColor("#c084fc");
+        c.preprocessor = QColor("#a855f7");
+        c.tag = QColor("#60a5fa");
+        c.attribute = QColor("#fbbf24");
+        c.cssProperty = QColor("#2dd4bf");
+        c.variable = QColor("#38bdf8");
+        c.function = QColor("#f97316");
+        c.escape = QColor("#22d3ee");
+    } else {
+        c.keyword = QColor("#1d4ed8");
+        c.string = QColor("#15803d");
+        c.comment = QColor("#64748b");
+        c.number = QColor("#9333ea");
+        c.preprocessor = QColor("#7e22ce");
+        c.tag = QColor("#2563eb");
+        c.attribute = QColor("#a16207");
+        c.cssProperty = QColor("#0f766e");
+        c.variable = QColor("#0369a1");
+        c.function = QColor("#d97706");
+        c.escape = QColor("#0e7490");
+    }
+    return c;
+}
+
+MainWindow::SyntaxColors MainWindow::highContrastSyntaxColor(ThemeColorFamily family, ThemeMode mode, const SyntaxColors &base)
+{
+    QColor accent = highContrastAccentColor(family, mode);
+    bool isDark = (mode == ThemeMode::Dark);
+
+    // Blend accent with base colors to create vibrant, family-tinted syntax colors
+    // while maintaining strong contrast against the high contrast background
+    auto blend = [&](const QColor &baseColor, float accentWeight) -> QColor {
+        if (isDark) {
+            // In dark mode, boost saturation and lightness for visibility on near-black
+            int r = qMin(255, baseColor.red() + static_cast<int>(accent.red() * accentWeight));
+            int g = qMin(255, baseColor.green() + static_cast<int>(accent.green() * accentWeight));
+            int b = qMin(255, baseColor.blue() + static_cast<int>(accent.blue() * accentWeight));
+            return QColor(r, g, b);
+        } else {
+            // In light mode, deepen colors for contrast against white
+            int r = qMax(0, baseColor.red() - static_cast<int>((255 - accent.red()) * accentWeight * 0.3f));
+            int g = qMax(0, baseColor.green() - static_cast<int>((255 - accent.green()) * accentWeight * 0.3f));
+            int b = qMax(0, baseColor.blue() - static_cast<int>((255 - accent.blue()) * accentWeight * 0.3f));
+            return QColor(r, g, b);
+        }
+    };
+
+    SyntaxColors result;
+    result.keyword = blend(base.keyword, 0.4f);
+    result.string = blend(base.string, 0.35f);
+    result.comment = isDark ? QColor("#b0b0b0") : QColor("#555555");
+    result.number = blend(base.number, 0.45f);
+    result.preprocessor = blend(base.preprocessor, 0.5f);
+    result.tag = blend(base.tag, 0.4f);
+    result.attribute = blend(base.attribute, 0.45f);
+    result.cssProperty = blend(base.cssProperty, 0.35f);
+    result.variable = blend(base.variable, 0.4f);
+    result.function = blend(base.function, 0.5f);
+    result.escape = blend(base.escape, 0.4f);
+    return result;
+}
+
+void MainWindow::applyHighContrastSyntax(SyntaxColors &c, ThemeColorFamily family, ThemeMode mode)
+{
+    SyntaxColors base = baseSyntaxColors(mode);
+    c = highContrastSyntaxColor(family, mode, base);
+}
+
 void MainWindow::updateStatusBar()
 {
     QPlainTextEdit *editor = getCurrentEditor();
@@ -1430,4 +1577,33 @@ void MainWindow::showKeyboardShortcuts()
     connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
 
     dialog->exec();
+}
+
+Theme MainWindow::themeFromLegacyInt(int legacy) const
+{
+    if (legacy < 2) {
+        return Theme(ThemeColorFamily::Default, static_cast<ThemeMode>(legacy));
+    }
+    if (legacy >= 30) {
+        return Theme(ThemeColorFamily::Default, static_cast<ThemeMode>(legacy - 30),
+                     ThemeFeatures(ThemeFeature::HighContrast));
+    }
+    int familyIndex = (legacy - 2) / 4 + 1;
+    int remainder = (legacy - 2) % 4;
+    ThemeMode mode = static_cast<ThemeMode>(remainder / 2);
+    bool hc = (remainder % 2) != 0;
+    return Theme(static_cast<ThemeColorFamily>(familyIndex), mode,
+                 hc ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures());
+}
+
+int MainWindow::themeToLegacyInt(const Theme &theme) const
+{
+    int family = static_cast<int>(theme.family);
+    int mode = static_cast<int>(theme.mode);
+    bool hc = theme.features.testFlag(ThemeFeature::HighContrast);
+
+    if (family == 0) {
+        return hc ? 30 + mode : mode;
+    }
+    return 2 + (family - 1) * 4 + mode * 2 + (hc ? 1 : 0);
 }

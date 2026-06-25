@@ -19,17 +19,52 @@
 #include <QCloseEvent>
 #include <QVBoxLayout>
 #include <QShortcut>
+#include <QColor>
+#include <QPalette>
+#include <QRadioButton>
+#include <QCheckBox>
+#include <QGroupBox>
+#include <QGridLayout>
 #include "codeeditor.h"
 
-enum ThemeType {
-    ThemeBlueLight,
-    ThemeBlueDark,
-    ThemeGreenLight,
-    ThemeGreenDark,
-    ThemeHighContrastLight,
-    ThemeHighContrastDark,
-    ThemeDefaultLight,
-    ThemeDefaultDark
+enum class ThemeColorFamily {
+    Default = 0,
+    Blue = 1,
+    Green = 2,
+    Red = 3,
+    Yellow = 4,
+    Brown = 5,
+    Cyan = 6,
+    Violet = 7
+};
+
+enum class ThemeMode {
+    Light = 0,
+    Dark = 1
+};
+
+enum class ThemeFeature {
+    None = 0x0,
+    HighContrast = 0x1
+};
+
+Q_DECLARE_FLAGS(ThemeFeatures, ThemeFeature)
+
+struct Theme {
+    ThemeColorFamily family;
+    ThemeMode mode;
+    ThemeFeatures features;
+
+    Theme(ThemeColorFamily f = ThemeColorFamily::Default, ThemeMode m = ThemeMode::Light,
+          ThemeFeatures feat = ThemeFeatures())
+        : family(f), mode(m), features(feat) {}
+
+    bool isDark() const { return mode == ThemeMode::Dark; }
+
+    bool operator==(const Theme &other) const {
+        return family == other.family && mode == other.mode && features == other.features;
+    }
+    bool operator!=(const Theme &other) const { return !(*this == other); }
 };
 
 QT_BEGIN_NAMESPACE
@@ -101,8 +136,7 @@ private:
     QWidget     *welcomeWidget;
     QVBoxLayout *recentProjectsLayout;
     QStackedWidget *editorStack;
-    bool darkMode;
-    ThemeType selectedTheme;
+    Theme selectedTheme;
 
     QTimer *autoSaveTimer;
     QStringList recentProjects;
@@ -118,13 +152,25 @@ private:
     QWidget* createKeyboardShortcutsWidget();
     void showWelcomeScreen();
     void showEditorInterface();
-    void applyTheme(ThemeType theme);
+    void applyTheme(const Theme &theme);
     void setSidebarCollapsed(bool collapsed);
     void loadRecentProjects();
     void saveRecentProjects();
     void updateRecentProjectsOnWelcome();
     void autoSave();
     bool checkUnsavedChanges();
+
+    QPalette buildBasePalette(ThemeColorFamily family, ThemeMode mode);
+    QColor highContrastAccentColor(ThemeColorFamily family, ThemeMode mode);
+    void applyHighContrastPalette(QPalette &p, ThemeColorFamily family, ThemeMode mode);
+    struct SyntaxColors { QColor keyword, string, comment, number, preprocessor, tag, attribute, cssProperty, variable, function, escape; };
+    SyntaxColors baseSyntaxColors(ThemeMode mode);
+    SyntaxColors highContrastSyntaxColor(ThemeColorFamily family, ThemeMode mode, const SyntaxColors &base);
+    void applyHighContrastSyntax(SyntaxColors &c, ThemeColorFamily family, ThemeMode mode);
+    void updateFamilyButtonPreview(QPushButton *btn, ThemeColorFamily family, ThemeMode mode, ThemeFeatures features);
+
+    Theme themeFromLegacyInt(int legacy) const;
+    int themeToLegacyInt(const Theme &theme) const;
 };
 
 #endif // MAINWINDOW_H
