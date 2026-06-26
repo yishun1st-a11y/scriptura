@@ -23,6 +23,10 @@ set(PROJECT_SOURCES
         codeeditor.h
         crashhandler.h
         crashhandler.cpp
+        lspclient.cpp
+        lspclient.h
+        problempanel.cpp
+        problempanel.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

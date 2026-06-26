@@ -91,11 +91,15 @@ public:
                         const QColor &trailingSpace = QColor());
     void setTabWidth(int spaces);
     int tabWidth() const;
+    void setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void changeEvent(QEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    bool event(QEvent *event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount = 0);
@@ -106,11 +110,15 @@ private:
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
     void drawIndentGuides(QPaintEvent *event);
+    void updateHoverTooltip(const QPoint &pos);
 
     QWidget *lineNumberArea;
     CodeHighlighter *syntaxHighlighter;
     bool m_showIndentGuides = true;
     int m_tabWidth = 4;
+    QList<QTextEdit::ExtraSelection> m_diagnosticSelections;
+    QPoint m_lastMousePos;
+    bool m_hoveringDiagnostic = false;
 };
 
 class LineNumberArea : public QWidget

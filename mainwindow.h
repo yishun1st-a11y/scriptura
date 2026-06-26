@@ -26,6 +26,8 @@
 #include <QGroupBox>
 #include <QGridLayout>
 #include "codeeditor.h"
+#include "lspclient.h"
+#include "problempanel.h"
 
 enum class ThemeColorFamily {
     Default = 0,
@@ -117,6 +119,7 @@ private slots:
     void showSearchBar(bool show);
     void performSearch(const QString &text, bool forward);
     void showKeyboardShortcuts();
+    void onEditorTextChanged();
 
 private:
     Ui::MainWindow *ui;
@@ -128,6 +131,7 @@ private:
     QToolButton *goUpButton;
     QToolButton *fileTreeToggleButton;
     QToolButton *terminalButton;
+    QToolButton *problemsButton;
     QLineEdit   *searchLineEdit;
     QPushButton *searchPrevBtn;
     QPushButton *searchNextBtn;
@@ -136,11 +140,15 @@ private:
     QWidget     *welcomeWidget;
     QVBoxLayout *recentProjectsLayout;
     QStackedWidget *editorStack;
+    ProblemPanel *problemPanel;
     Theme selectedTheme;
 
     QTimer *autoSaveTimer;
+    QTimer *lspDebounceTimer;
+    LspClient *lspClient;
     QStringList recentProjects;
     int maxRecentProjects = 10;
+    QStringList m_languageServers; // Configured language servers
 
     void updateCursorPosition();
     void updateStatusBar();
@@ -150,6 +158,13 @@ private:
     CodeEditor* getCurrentCodeEditor();
     QWidget* createWelcomeWidget();
     QWidget* createKeyboardShortcutsWidget();
+    void startLanguageServer(const QString &filePath);
+    void startLanguageServerForProject(const QString &projectPath);
+    void stopLanguageServer();
+    void onDiagnosticsReceived(const QString &uri, const QList<LspClient::Diagnostic> &diagnostics);
+    void onProblemActivated(const QString &fileUri, int line, int column);
+    void onProblemsFilterChanged(ProblemPanel::Filter filter);
+    void toggleProblemPanel();
     void showWelcomeScreen();
     void showEditorInterface();
     void applyTheme(const Theme &theme);

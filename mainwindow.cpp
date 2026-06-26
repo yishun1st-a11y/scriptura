@@ -41,6 +41,9 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , selectedTheme(ThemeColorFamily::Default, ThemeMode::Light)
     , autoSaveTimer(new QTimer(this))
+    , lspDebounceTimer(new QTimer(this))
+    , lspClient(new LspClient(this))
+    , problemPanel(new ProblemPanel(this))
 {
     ui->setupUi(this);
 
@@ -121,12 +124,23 @@ MainWindow::MainWindow(QWidget *parent)
         "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
     );
 
+    problemsButton = new QToolButton(this);
+    problemsButton->setText("⚠");
+    problemsButton->setToolTip(tr("Toggle Problems"));
+    problemsButton->setCheckable(true);
+    problemsButton->setStyleSheet(
+        "QToolButton { border: none; background: transparent; font-size: 18px; padding: 4px; }"
+        "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
+    );
+    ui->iconSideBar->layout()->addWidget(problemsButton);
+
     connect(fileTreeToggleButton, &QToolButton::clicked, this, [this](bool checked) {
         Q_UNUSED(checked);
         setSidebarCollapsed(!fileTreeToggleButton->isChecked());
     });
     connect(terminalButton, &QToolButton::clicked, this, &MainWindow::on_action_new_window_triggered);
-    
+    connect(problemsButton, &QToolButton::clicked, this, &MainWindow::toggleProblemPanel);
+
     connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
 
     ui->tabWidget->clear();
@@ -134,6 +148,10 @@ MainWindow::MainWindow(QWidget *parent)
     
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::on_tabWidget_tabCloseRequested);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &MainWindow::updateStatusBar);
+
+    // Add problem panel at the bottom
+    ui->editorLayout->addWidget(problemPanel);
+    problemPanel->hide();
 
     ui->editorLayout->removeWidget(ui->tabWidget);
     editorStack = new QStackedWidget(this);
@@ -145,8 +163,29 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(autoSaveTimer, &QTimer::timeout, this, &MainWindow::autoSave);
 
+    // LSP debounce timer for text changes
+    lspDebounceTimer->setSingleShot(true);
+    lspDebounceTimer->setInterval(500); // 500ms debounce
+    connect(lspDebounceTimer, &QTimer::timeout, this, &MainWindow::onEditorTextChanged);
+
     QShortcut *shortcutDialog = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(shortcutDialog, &QShortcut::activated, this, &MainWindow::showKeyboardShortcuts);
+
+    // LSP connections
+    connect(lspClient, &LspClient::diagnosticsReceived, this, &MainWindow::onDiagnosticsReceived);
+    connect(lspClient, &LspClient::serverStarted, this, []() {
+        qDebug() << "LSP server started";
+    });
+    connect(lspClient, &LspClient::serverFailed, this, [](const QString &err) {
+        qDebug() << "LSP server failed:" << err;
+    });
+    connect(lspClient, &LspClient::logMessage, this, [](const QString &msg) {
+        qDebug() << "LSP:" << msg;
+    });
+
+    // Problem panel connections
+    connect(problemPanel, &ProblemPanel::problemActivated, this, &MainWindow::onProblemActivated);
+    connect(problemPanel, &ProblemPanel::filterChanged, this, &MainWindow::onProblemsFilterChanged);
 
     setSidebarCollapsed(settings.value("ui/sidebarCollapsed", true).toBool());
 }
@@ -279,6 +318,17 @@ void MainWindow::on_action_open_project_triggered()
     autoSaveTimer->start(30000);
 
     setWindowTitle(QFileInfo(projectDir).fileName() + " - Scriptura");
+
+    // Initialize LSP for the project directory
+    QString rootUri = QUrl::fromLocalFile(projectDir).toString();
+    if (!lspClient->isRunning()) {
+        // Try to start a language server for the project
+        startLanguageServerForProject(projectDir);
+    }
+    problemPanel->clearAll();
+    problemPanel->setCurrentFile(QString()); // Show all problems
+    problemPanel->show();
+    problemsButton->setChecked(true);
 }
 
 void MainWindow::on_action_save_triggered()
@@ -592,6 +642,9 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
         connect(editor, &QPlainTextEdit::modificationChanged, this,
                 [this, tabIndex](bool m) { updateTabModified(tabIndex, m); });
+        connect(editor, &QPlainTextEdit::textChanged, this, [this]() {
+            lspDebounceTimer->start();
+        });
 
         OpenFile openFile;
         openFile.filePath = path;
@@ -601,10 +654,17 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         showEditorInterface();
         ui->tabWidget->addTab(editor, openFile.fileName);
         ui->tabWidget->setCurrentWidget(editor);
-        
+
         currentFile = path;
         setWindowTitle(openFile.fileName + " - Scriptura");
         showSearchBar(true);
+
+        // LSP: Open file in language server
+        startLanguageServer(path);
+        QString uri = QUrl::fromLocalFile(path).toString();
+        QString langId = QFileInfo(path).suffix().toLower();
+        lspClient->didOpen(uri, langId, content);
+        problemPanel->setCurrentFile(uri);
     }
 }
 
@@ -631,20 +691,29 @@ void MainWindow::on_tabWidget_tabCloseRequested(int index)
         if (openFiles[index].filePath == currentFile) {
             currentFile = "";
         }
+        // LSP: Close file in language server
+        QString closedPath = openFiles[index].filePath;
+        QString closedUri = QUrl::fromLocalFile(closedPath).toString();
+        lspClient->didClose(closedUri);
         openFiles.removeAt(index);
     }
-    
+
     QWidget *widget = ui->tabWidget->widget(index);
     ui->tabWidget->removeTab(index);
     delete widget;
-    
+
     if (ui->tabWidget->count() > 0) {
         showEditorInterface();
         updateStatusBar();
+        // Update problem panel to show current file's problems
+        QString newCurrent = QUrl::fromLocalFile(currentFile).toString();
+        problemPanel->setCurrentFile(newCurrent);
     } else {
         showWelcomeScreen();
         setWindowTitle(projectDir.isEmpty() ? "Scriptura" : QFileInfo(projectDir).fileName() + " - Scriptura");
         showSearchBar(false);
+        problemPanel->hide();
+        problemsButton->setChecked(false);
     }
 }
 
@@ -1641,4 +1710,239 @@ int MainWindow::themeToLegacyInt(const Theme &theme) const
         return hc ? 30 + mode : mode;
     }
     return 2 + (family - 1) * 4 + mode * 2 + (hc ? 1 : 0);
+}
+
+void MainWindow::startLanguageServer(const QString &filePath)
+{
+    Q_UNUSED(filePath)
+
+    // Language server configuration based on file extension
+    static QMap<QString, QPair<QString, QStringList>> serverConfigs = {
+        {"cpp",  {"/usr/bin/clangd", QStringList()}},
+        {"c",    {"/usr/bin/clangd", QStringList()}},
+        {"py",   {"/usr/bin/pyright-langserver", QStringList("--stdio")}},
+        {"js",   {"/usr/bin/typescript-language-server", QStringList("--stdio")}},
+        {"ts",   {"/usr/bin/typescript-language-server", QStringList("--stdio")}},
+        {"java", {"/usr/bin/jdtls", QStringList()}},
+        {"rs",   {"/usr/bin/rust-analyzer", QStringList()}},
+        {"go",   {"/usr/bin/gopls", QStringList()}},
+    };
+
+    QString ext = QFileInfo(filePath).suffix().toLower();
+    auto it = serverConfigs.find(ext);
+    if (it == serverConfigs.end())
+        return;
+
+    QString command = it.value().first;
+    QStringList args = it.value().second;
+
+    if (!lspClient->isRunning()) {
+        QString rootUri = QUrl::fromLocalFile(projectDir.isEmpty() ? QDir::homePath() : projectDir).toString();
+        if (lspClient->startServer(command, args, rootUri)) {
+            // Wait for server to be ready, then initialize
+            QTimer::singleShot(500, this, [this, filePath]() {
+                QString uri = QUrl::fromLocalFile(filePath).toString();
+                QString langId = QFileInfo(filePath).suffix().toLower();
+                lspClient->initialize(QUrl::fromLocalFile(projectDir.isEmpty() ? QDir::homePath() : projectDir).toString(), langId);
+            });
+        }
+    }
+}
+
+void MainWindow::startLanguageServerForProject(const QString &projectPath)
+{
+    // Determine the best language server for the project based on file types found
+    QDir dir(projectPath);
+    QStringList filters = {"*.cpp", "*.c", "*.h", "*.hpp", "*.py", "*.js", "*.ts", "*.java", "*.rs", "*.go"};
+    QSet<QString> foundExtensions;
+
+    // Scan project directory for source files (limit depth to avoid too many files)
+    dir.setFilter(QDir::Files | QDir::NoDotAndDotDot);
+    dir.setNameFilters(filters);
+    QFileInfoList files = dir.entryInfoList(QDir::Files, QDir::Name);
+
+    for (const QFileInfo &fi : files) {
+        foundExtensions.insert(fi.suffix().toLower());
+    }
+
+    // Also check subdirectories (one level deep)
+    QFileInfoList subdirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QFileInfo &subdir : subdirs) {
+        QDir sub(subdir.absoluteFilePath());
+        sub.setFilter(QDir::Files | QDir::NoDotAndDotDot);
+        sub.setNameFilters(filters);
+        QFileInfoList subFiles = sub.entryInfoList(QDir::Files, QDir::Name);
+        for (const QFileInfo &fi : subFiles) {
+            foundExtensions.insert(fi.suffix().toLower());
+        }
+    }
+
+    // Pick the most appropriate language server
+    QString serverCommand;
+    QStringList serverArgs;
+
+    if (foundExtensions.contains("cpp") || foundExtensions.contains("c") || foundExtensions.contains("h")) {
+        serverCommand = "/usr/bin/clangd";
+    } else if (foundExtensions.contains("py")) {
+        serverCommand = "/usr/bin/pyright-langserver";
+        serverArgs = QStringList("--stdio");
+    } else if (foundExtensions.contains("js") || foundExtensions.contains("ts")) {
+        serverCommand = "/usr/bin/typescript-language-server";
+        serverArgs = QStringList("--stdio");
+    } else if (foundExtensions.contains("java")) {
+        serverCommand = "/usr/bin/jdtls";
+    } else if (foundExtensions.contains("rs")) {
+        serverCommand = "/usr/bin/rust-analyzer";
+    } else if (foundExtensions.contains("go")) {
+        serverCommand = "/usr/bin/gopls";
+    } else {
+        // No recognized source files, don't start a server
+        return;
+    }
+
+    QString rootUri = QUrl::fromLocalFile(projectPath).toString();
+    if (lspClient->startServer(serverCommand, serverArgs, rootUri)) {
+        QTimer::singleShot(500, this, [this, projectPath, rootUri, filters]() {
+            // Determine language ID from first found file
+            QString langId = "plaintext";
+            QDir dir(projectPath);
+            dir.setFilter(QDir::Files | QDir::NoDotAndDotDot);
+            dir.setNameFilters(filters);
+            QFileInfoList files = dir.entryInfoList(QDir::Files, QDir::Name);
+            if (!files.isEmpty()) {
+                langId = files.first().suffix().toLower();
+            }
+            lspClient->initialize(rootUri, langId);
+
+            // Open all source files in the project for diagnostics
+            for (const QFileInfo &fi : files) {
+                QFile file(fi.absoluteFilePath());
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    QTextStream in(&file);
+                    QString content = in.readAll();
+                    file.close();
+                    QString uri = QUrl::fromLocalFile(fi.absoluteFilePath()).toString();
+                    lspClient->didOpen(uri, fi.suffix().toLower(), content);
+                }
+            }
+        });
+    }
+}
+
+void MainWindow::stopLanguageServer()
+{
+    if (lspClient->isRunning()) {
+        lspClient->shutdown();
+        lspClient->exit();
+    }
+}
+
+void MainWindow::onDiagnosticsReceived(const QString &uri, const QList<LspClient::Diagnostic> &diagnostics)
+{
+    // Update problem panel
+    problemPanel->setProblems(uri, diagnostics);
+
+    // Update squiggly underlines in editor
+    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+        CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i));
+        if (!editor)
+            continue;
+
+        QString tabUri = QUrl::fromLocalFile(openFiles[i].filePath).toString();
+        if (tabUri == uri) {
+            QList<QTextEdit::ExtraSelection> extraSelections;
+
+            for (const LspClient::Diagnostic &diag : diagnostics) {
+                QList<QTextEdit::ExtraSelection> diagSelections =
+                    lspClient->createDiagnosticSelections(diag, editor->document());
+                extraSelections.append(diagSelections);
+            }
+
+            // Merge with existing selections (like current line highlight)
+            QList<QTextEdit::ExtraSelection> existing = editor->extraSelections();
+            // Keep only the current line highlight (first selection)
+            if (!existing.isEmpty() && existing.first().format.hasProperty(QTextFormat::FullWidthSelection)) {
+                extraSelections.prepend(existing.first());
+            }
+            editor->setExtraSelections(extraSelections);
+            break;
+        }
+    }
+}
+
+void MainWindow::onProblemActivated(const QString &fileUri, int line, int column)
+{
+    // Find the file in open tabs or open it
+    QString localPath = QUrl(fileUri).toLocalFile();
+    for (int i = 0; i < openFiles.size(); ++i) {
+        if (openFiles[i].filePath == localPath) {
+            ui->tabWidget->setCurrentIndex(i);
+            CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i));
+            if (editor) {
+                QTextCursor cursor = editor->textCursor();
+                QTextBlock block = editor->document()->findBlockByNumber(line);
+                if (block.isValid()) {
+                    cursor.setPosition(block.position() + column);
+                    editor->setTextCursor(cursor);
+                    editor->setFocus();
+                }
+            }
+            return;
+        }
+    }
+
+    // File not open, open it
+    QModelIndex index = fileModel->index(localPath);
+    if (index.isValid()) {
+        on_fileTreeView_clicked(index);
+        // After opening, navigate to the line
+        QTimer::singleShot(100, this, [this, line, column]() {
+            CodeEditor *editor = getCurrentCodeEditor();
+            if (editor) {
+                QTextCursor cursor = editor->textCursor();
+                QTextBlock block = editor->document()->findBlockByNumber(line);
+                if (block.isValid()) {
+                    cursor.setPosition(block.position() + column);
+                    editor->setTextCursor(cursor);
+                    editor->setFocus();
+                }
+            }
+        });
+    }
+}
+
+void MainWindow::onProblemsFilterChanged(ProblemPanel::Filter filter)
+{
+    Q_UNUSED(filter)
+    // Could update status bar or other UI elements based on filter
+}
+
+void MainWindow::toggleProblemPanel()
+{
+    if (problemPanel->isVisible()) {
+        problemPanel->hide();
+        problemsButton->setChecked(false);
+    } else {
+        problemPanel->show();
+        problemsButton->setChecked(true);
+        // Update with current file's problems
+        if (!currentFile.isEmpty()) {
+            QString uri = QUrl::fromLocalFile(currentFile).toString();
+            problemPanel->setCurrentFile(uri);
+        }
+    }
+}
+
+void MainWindow::onEditorTextChanged()
+{
+    // Debounced: send text change to LSP server
+    if (currentFile.isEmpty() || !lspClient->isRunning())
+        return;
+
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (!editor)
+        return;
+
+    QString uri = QUrl::fromLocalFile(currentFile).toString();
+    lspClient->didChange(uri, editor->toPlainText());
 }

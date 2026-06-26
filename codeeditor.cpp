@@ -697,3 +697,63 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
         ++blockNumber;
     }
 }
+
+void CodeEditor::setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags)
+{
+    m_diagnosticSelections = diags;
+    // Merge with current extra selections (current line highlight)
+    QList<QTextEdit::ExtraSelection> selections;
+    QList<QTextEdit::ExtraSelection> existing = extraSelections();
+
+    // Keep current line highlight
+    for (const QTextEdit::ExtraSelection &sel : existing) {
+        if (sel.format.hasProperty(QTextFormat::FullWidthSelection)) {
+            selections.append(sel);
+            break;
+        }
+    }
+
+    selections.append(diags);
+    setExtraSelections(selections);
+}
+
+void CodeEditor::mouseMoveEvent(QMouseEvent *event)
+{
+    m_lastMousePos = event->pos();
+    updateHoverTooltip(event->pos());
+    QPlainTextEdit::mouseMoveEvent(event);
+}
+
+void CodeEditor::leaveEvent(QEvent *event)
+{
+    m_hoveringDiagnostic = false;
+    QPlainTextEdit::leaveEvent(event);
+}
+
+bool CodeEditor::event(QEvent *event)
+{
+    if (event->type() == QEvent::ToolTip) {
+        QHelpEvent *helpEvent = static_cast<QHelpEvent*>(event);
+        updateHoverTooltip(helpEvent->pos());
+        if (m_hoveringDiagnostic)
+            return true;
+    }
+    return QPlainTextEdit::event(event);
+}
+
+void CodeEditor::updateHoverTooltip(const QPoint &pos)
+{
+    // Check if mouse is over a diagnostic selection
+    QTextCursor cursor = cursorForPosition(pos);
+    int cursorPos = cursor.position();
+
+    for (const QTextEdit::ExtraSelection &sel : m_diagnosticSelections) {
+        if (sel.cursor.selectionStart() <= cursorPos && cursorPos <= sel.cursor.selectionEnd()) {
+            // Could show diagnostic message in tooltip here
+            // For now, just track that we're hovering
+            m_hoveringDiagnostic = true;
+            return;
+        }
+    }
+    m_hoveringDiagnostic = false;
+}
