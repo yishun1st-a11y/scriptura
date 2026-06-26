@@ -27,6 +27,8 @@ set(PROJECT_SOURCES
         lspclient.h
         problempanel.cpp
         problempanel.h
+        splashscreen.h
+        icon.png
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

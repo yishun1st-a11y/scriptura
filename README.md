@@ -1,5 +1,7 @@
 # Scriptura
 
+![Scriptura Icon](icon.png)
+
 A simple Qt-based text editor with project file browsing.
 
 ## Features
