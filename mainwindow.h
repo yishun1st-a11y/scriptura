@@ -28,6 +28,8 @@
 #include "codeeditor.h"
 #include "lspclient.h"
 #include "problempanel.h"
+#include "todopanel.h"
+#include "gitpanel.h"
 
 enum class ThemeColorFamily {
     Default = 0,
@@ -105,6 +107,8 @@ private slots:
     void on_action_delete_file_directory_triggered();
     void on_action_new_window_triggered();
     void on_action_clone_window_triggered();
+    void on_action_git_commit_triggered();
+    void on_action_git_push_triggered();
     void on_action_about_triggered();
     void on_action_editor_settings_triggered();
     void on_action_theme_triggered();
@@ -120,6 +124,7 @@ private slots:
     void performSearch(const QString &text, bool forward);
     void showKeyboardShortcuts();
     void onEditorTextChanged();
+    void on_placeholderButton_clicked(bool checked);
 
 private:
     Ui::MainWindow *ui;
@@ -133,16 +138,18 @@ private:
      QToolButton *fileTreeToggleButton;
      QToolButton *terminalButton;
      QToolButton *problemsButton;
-    QLineEdit   *searchLineEdit;
-    QPushButton *searchPrevBtn;
-    QPushButton *searchNextBtn;
-    QLabel      *searchCountLabel;
-    QWidget     *searchBarWidget;
-    QWidget     *welcomeWidget;
-    QVBoxLayout *recentProjectsLayout;
-    QStackedWidget *editorStack;
-    ProblemPanel *problemPanel;
-    Theme selectedTheme;
+     QLineEdit   *searchLineEdit;
+     QPushButton *searchPrevBtn;
+     QPushButton *searchNextBtn;
+     QLabel      *searchCountLabel;
+     QWidget     *searchBarWidget;
+     QWidget     *welcomeWidget;
+     QVBoxLayout *recentProjectsLayout;
+     QStackedWidget *editorStack;
+     ProblemPanel *problemPanel;
+     TodoPanel    *todoPanel;
+     GitPanel     *gitPanel;
+     Theme selectedTheme;
 
     QTimer *autoSaveTimer;
     QTimer *lspDebounceTimer;

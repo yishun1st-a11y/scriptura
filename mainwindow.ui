@@ -36,15 +36,18 @@
        </widget>
       </item>
       <item>
-       <widget class="QToolButton" name="placeholderButton">
-        <property name="text">
-         <string>🔖</string>
-        </property>
-        <property name="toolTip">
-         <string>Todo Manager</string>
-        </property>
-       </widget>
-      </item>
+        <widget class="QToolButton" name="placeholderButton">
+         <property name="text">
+          <string>🔖</string>
+         </property>
+         <property name="toolTip">
+          <string>Todo Manager</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
       <item>
        <spacer name="iconSidebarSpacer">
           <property name="orientation">
@@ -123,6 +126,13 @@
     <addaction name="action_new_window"/>
     <addaction name="action_clone_window"/>
    </widget>
+   <widget class="QMenu" name="menu_git">
+    <property name="title">
+     <string>&amp;Git</string>
+    </property>
+    <addaction name="action_git_commit"/>
+    <addaction name="action_git_push"/>
+   </widget>
    <widget class="QMenu" name="menu_settings">
     <property name="title">
      <string>&amp;settings</string>
@@ -136,6 +146,7 @@
    <addaction name="menu_File"/>
    <addaction name="menu_edit"/>
    <addaction name="menu_terminal"/>
+   <addaction name="menu_git"/>
    <addaction name="menu_settings"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -203,12 +214,22 @@
     <string>&amp;new window</string>
    </property>
   </action>
-  <action name="action_clone_window">
-   <property name="text">
-    <string>&amp;clone window</string>
-   </property>
-  </action>
-  <action name="action_about">
+   <action name="action_clone_window">
+    <property name="text">
+     <string>&amp;clone window</string>
+    </property>
+   </action>
+   <action name="action_git_commit">
+    <property name="text">
+     <string>&amp;Commit...</string>
+    </property>
+   </action>
+   <action name="action_git_push">
+    <property name="text">
+     <string>&amp;Push...</string>
+    </property>
+   </action>
+   <action name="action_about">
    <property name="text">
     <string>&amp;about</string>
    </property>

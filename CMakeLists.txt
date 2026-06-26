@@ -27,6 +27,10 @@ set(PROJECT_SOURCES
         lspclient.h
         problempanel.cpp
         problempanel.h
+        todopanel.cpp
+        todopanel.h
+        gitpanel.cpp
+        gitpanel.h
         splashscreen.h
         icon.png
 )

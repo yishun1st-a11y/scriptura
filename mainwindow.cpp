@@ -3,6 +3,8 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "codeeditor.h"
+#include "todopanel.h"
+#include "gitpanel.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -44,6 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     , lspDebounceTimer(new QTimer(this))
     , lspClient(new LspClient(this))
     , problemPanel(new ProblemPanel(this))
+    , todoPanel(new TodoPanel(this))
+    , gitPanel(new GitPanel(this))
 {
     ui->setupUi(this);
 
@@ -111,11 +115,13 @@ MainWindow::MainWindow(QWidget *parent)
      ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
 
      placeholderButton = findChild<QToolButton*>("placeholderButton");
-     placeholderButton->setToolTip(tr("Todo Manager"));
-     placeholderButton->setStyleSheet(
-         "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
-         "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
-     );
+      placeholderButton->setToolTip(tr("Todo Manager"));
+      placeholderButton->setCheckable(true);
+      placeholderButton->setStyleSheet(
+          "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
+          "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
+          "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
+      );
 
      fileTreeToggleButton = findChild<QToolButton*>("fileTreeToggleButton");
     fileTreeToggleButton->setToolTip(tr("Toggle File Tree"));
@@ -147,8 +153,9 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(terminalButton, &QToolButton::clicked, this, &MainWindow::on_action_new_window_triggered);
     connect(problemsButton, &QToolButton::clicked, this, &MainWindow::toggleProblemPanel);
+     connect(placeholderButton, &QToolButton::toggled, this, &MainWindow::on_placeholderButton_clicked);
 
-    connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
+     connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
 
     ui->tabWidget->clear();
     ui->tabWidget->setTabsClosable(true);
@@ -159,6 +166,14 @@ MainWindow::MainWindow(QWidget *parent)
     // Add problem panel at the bottom
     ui->editorLayout->addWidget(problemPanel);
     problemPanel->hide();
+
+    // Add todo panel at the bottom
+    ui->editorLayout->addWidget(todoPanel);
+    todoPanel->hide();
+
+    // Add git panel at the bottom
+    ui->editorLayout->addWidget(gitPanel);
+    gitPanel->hide();
 
     ui->editorLayout->removeWidget(ui->tabWidget);
     editorStack = new QStackedWidget(this);
@@ -1944,6 +1959,49 @@ void MainWindow::toggleProblemPanel()
             QString uri = QUrl::fromLocalFile(currentFile).toString();
             problemPanel->setCurrentFile(uri);
         }
+    }
+}
+
+void MainWindow::on_action_git_commit_triggered()
+{
+    bool ok;
+    QString message = QInputDialog::getText(this, tr("Git Commit"), tr("Commit message:"), QLineEdit::Normal, QString(), &ok);
+    if (ok && !message.isEmpty()) {
+        QProcess gitProcess(this);
+        gitProcess.setWorkingDirectory(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
+        gitProcess.start("git", {"commit", "-m", message});
+        if (gitProcess.waitForFinished(3000)) {
+            QString output = QString::fromLocal8Bit(gitProcess.readAllStandardOutput());
+            QString error = QString::fromLocal8Bit(gitProcess.readAllStandardError());
+            gitPanel->setOutput(output + error);
+        } else {
+            gitPanel->setOutput(tr("Failed to run git commit"));
+        }
+        gitPanel->show();
+    }
+}
+
+void MainWindow::on_action_git_push_triggered()
+{
+    QProcess gitProcess(this);
+    gitProcess.setWorkingDirectory(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
+    gitProcess.start("git", {"push"});
+    if (gitProcess.waitForFinished(3000)) {
+        QString output = QString::fromLocal8Bit(gitProcess.readAllStandardOutput());
+        QString error = QString::fromLocal8Bit(gitProcess.readAllStandardError());
+        gitPanel->setOutput(output + error);
+    } else {
+        gitPanel->setOutput(tr("Failed to run git push"));
+    }
+    gitPanel->show();
+}
+
+void MainWindow::on_placeholderButton_clicked(bool checked)
+{
+    if (checked) {
+        todoPanel->show();
+    } else {
+        todoPanel->hide();
     }
 }
 
