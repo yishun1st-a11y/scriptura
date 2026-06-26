@@ -129,9 +129,10 @@ private:
     QList<OpenFile> openFiles;
     QFileSystemModel *fileModel;
     QToolButton *goUpButton;
-    QToolButton *fileTreeToggleButton;
-    QToolButton *terminalButton;
-    QToolButton *problemsButton;
+     QToolButton *placeholderButton;
+     QToolButton *fileTreeToggleButton;
+     QToolButton *terminalButton;
+     QToolButton *problemsButton;
     QLineEdit   *searchLineEdit;
     QPushButton *searchPrevBtn;
     QPushButton *searchNextBtn;

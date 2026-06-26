@@ -108,9 +108,16 @@ MainWindow::MainWindow(QWidget *parent)
     toolbar->addWidget(searchBarWidget);
 
     ui->iconSideBar->setFixedWidth(50);
-    ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
+     ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
 
-    fileTreeToggleButton = findChild<QToolButton*>("fileTreeToggleButton");
+     placeholderButton = findChild<QToolButton*>("placeholderButton");
+     placeholderButton->setToolTip(tr("Placeholder"));
+     placeholderButton->setStyleSheet(
+         "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
+         "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
+     );
+
+     fileTreeToggleButton = findChild<QToolButton*>("fileTreeToggleButton");
     fileTreeToggleButton->setToolTip(tr("Toggle File Tree"));
     fileTreeToggleButton->setStyleSheet(
         "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
@@ -308,12 +315,13 @@ void MainWindow::on_action_open_project_triggered()
     }
 
     projectDir = dirName;
-    rootIndex = fileModel->index(projectDir);
-    ui->fileTreeView->setRootIndex(rootIndex);
-    ui->fileTreeView->hideColumn(1);
-    ui->fileTreeView->hideColumn(2);
-    ui->fileTreeView->hideColumn(3);
-    goUpButton->setEnabled(rootIndex.parent().isValid());
+     rootIndex = fileModel->index(projectDir);
+     ui->fileTreeView->setRootIndex(rootIndex);
+     ui->fileTreeView->hideColumn(1);
+     ui->fileTreeView->hideColumn(2);
+     ui->fileTreeView->hideColumn(3);
+     // Disable goUpButton to restrict access to other directories when project is opened
+     goUpButton->setEnabled(false);
 
     autoSaveTimer->start(30000);
 
@@ -721,6 +729,12 @@ void MainWindow::goUpClicked()
 {
     if (!rootIndex.isValid())
         return;
+    
+    // When a project is opened, restrict navigation to project directory only
+    if (!projectDir.isEmpty()) {
+        // Already at project root, do not go up
+        return;
+    }
     
     QModelIndex parentIndex = rootIndex.parent();
     if (parentIndex.isValid()) {

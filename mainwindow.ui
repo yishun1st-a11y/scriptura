@@ -16,10 +16,20 @@
    <widget class="QWidget" name="centralwidget">
     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,1">
      <item>
-      <widget class="QWidget" name="iconSideBar">
-       <layout class="QVBoxLayout" name="iconSidebarLayout">
-        <item>
-         <widget class="QToolButton" name="fileTreeToggleButton">
+    <widget class="QWidget" name="iconSideBar">
+     <layout class="QVBoxLayout" name="iconSidebarLayout">
+      <item>
+       <widget class="QToolButton" name="placeholderButton">
+        <property name="text">
+         <string>🔖</string>
+        </property>
+        <property name="toolTip">
+         <string>Placeholder</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="fileTreeToggleButton">
           <property name="text">
            <string>📁</string>
           </property>

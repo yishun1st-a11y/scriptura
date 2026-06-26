@@ -49,6 +49,7 @@ private:
     void setupHtml();
     void setupCss();
     void setupPlainText();
+    void setupScript();
 
     void handleCStyleBlockComment(const QString &text);
     void handlePythonTripleString(const QString &text);
