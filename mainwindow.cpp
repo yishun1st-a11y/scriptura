@@ -111,7 +111,7 @@ MainWindow::MainWindow(QWidget *parent)
      ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
 
      placeholderButton = findChild<QToolButton*>("placeholderButton");
-     placeholderButton->setToolTip(tr("Placeholder"));
+     placeholderButton->setToolTip(tr("Todo Manager"));
      placeholderButton->setStyleSheet(
          "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
          "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
