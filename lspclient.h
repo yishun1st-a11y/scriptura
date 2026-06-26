@@ -1,0 +1,140 @@
+#ifndef LSPCLIENT_H
+#define LSPCLIENT_H
+
+#include <QObject>
+#include <QProcess>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QTimer>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QTextEdit>
+#include <QMap>
+#include <QSet>
+
+class LspClient : public QObject
+{
+    Q_OBJECT
+public:
+    struct Diagnostic {
+        enum Severity { Error = 1, Warning = 2, Information = 3, Hint = 4 };
+        Severity severity;
+        int line;
+        int column;
+        int endLine;
+        int endColumn;
+        QString message;
+        QString source;
+        QString code;
+        QList<QTextEdit::ExtraSelection> selections;
+    };
+
+    struct Position {
+        int line;
+        int character;
+    };
+
+    struct Range {
+        Position start;
+        Position end;
+    };
+
+    explicit LspClient(QObject *parent = nullptr);
+    ~LspClient();
+
+    bool startServer(const QString &command, const QStringList &args = QStringList(),
+                     const QString &rootUri = QString());
+    void stopServer();
+
+    bool isRunning() const { return m_process && m_process->state() == QProcess::Running; }
+
+    // LSP Methods
+    void initialize(const QString &rootUri, const QString &languageId);
+    void initialized();
+    void didOpen(const QString &uri, const QString &languageId, const QString &text);
+    void didChange(const QString &uri, const QString &text);
+    void didClose(const QString &uri);
+    void shutdown();
+    void exit();
+
+    // LSP Requests
+    void completion(const QString &uri, const Position &pos);
+    void definition(const QString &uri, const Position &pos);
+    void hover(const QString &uri, const Position &pos);
+    void references(const QString &uri, const Position &pos);
+    void rename(const QString &uri, const Position &pos, const QString &newName);
+    void codeAction(const QString &uri, const Range &range);
+
+    // Diagnostics
+    QList<Diagnostic> diagnosticsForFile(const QString &uri) const;
+    void clearDiagnostics(const QString &uri);
+
+signals:
+    void serverStarted();
+    void serverStopped();
+    void serverFailed(const QString &error);
+
+    void initializedReceived();
+    void diagnosticsReceived(const QString &uri, const QList<Diagnostic> &diagnostics);
+    void completionReceived(const QJsonArray &items, int requestId);
+    void definitionReceived(const QJsonArray &locations, int requestId);
+    void hoverReceived(const QJsonObject &contents, int requestId);
+    void referencesReceived(const QJsonArray &locations, int requestId);
+    void renameWorkspaceEdit(const QJsonObject &edit, int requestId);
+    void codeActionReceived(const QJsonArray &actions, int requestId);
+
+    void logMessage(const QString &msg);
+
+private slots:
+    void onProcessReadyRead();
+    void onProcessError(QProcess::ProcessError error);
+    void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onTimeout();
+
+private:
+    enum MessageType { Request = 1, Response = 2, Notification = 3 };
+
+    struct LspMessage {
+        MessageType type;
+        int id;
+        QString method;
+        QJsonObject params;
+        QJsonObject result;
+        QJsonObject error;
+    };
+
+    void sendMessage(const QJsonObject &msg);
+    void sendRequest(const QString &method, const QJsonObject &params, int id);
+    void sendNotification(const QString &method, const QJsonObject &params);
+    void processMessage(const QByteArray &data);
+    QByteArray readMessage();
+    void handleResponse(const QJsonObject &obj);
+    void handleNotification(const QJsonObject &obj);
+    void handleRequest(const QJsonObject &obj);
+
+    QJsonObject createRequest(const QString &method, const QJsonObject &params, int id);
+    QJsonObject createNotification(const QString &method, const QJsonObject &params);
+    QJsonObject createResponse(int id, const QJsonValue &result);
+    QJsonObject createErrorResponse(int id, int code, const QString &message);
+
+    Diagnostic parseDiagnostic(const QJsonObject &diag) const;
+public:
+    QList<QTextEdit::ExtraSelection> createDiagnosticSelections(const Diagnostic &diag,
+                                                                const QTextDocument *doc) const;
+
+    QProcess *m_process;
+    QByteArray m_buffer;
+    QMutex m_mutex;
+    int m_requestId;
+    int m_initialized;
+    QString m_rootUri;
+    QString m_currentUri;
+    QString m_currentLanguageId;
+
+    QMap<QString, QList<Diagnostic>> m_diagnostics;
+    QMap<int, QString> m_pendingRequests;
+    QTimer *m_timeoutTimer;
+};
+
+#endif // LSPCLIENT_H
