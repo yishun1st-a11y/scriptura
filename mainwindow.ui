@@ -49,7 +49,17 @@
         </widget>
        </item>
       <item>
-       <spacer name="iconSidebarSpacer">
+         <widget class="QToolButton" name="runScriptButton">
+          <property name="text">
+           <string>▶</string>
+          </property>
+          <property name="toolTip">
+           <string>Run Script</string>
+          </property>
+         </widget>
+        </item>
+       <item>
+        <spacer name="iconSidebarSpacer">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
           </property>
@@ -245,11 +255,19 @@
    </property>
   </action>
 <action name="action_theme">
-    <property name="text">
-     <string>&amp;theme</string>
-    </property>
-   </action>
-  </widget>
+     <property name="text">
+      <string>&amp;theme</string>
+     </property>
+    </action>
+    <action name="action_run_script">
+     <property name="text">
+      <string>&amp;Run Script</string>
+     </property>
+     <property name="shortcut">
+      <string>Ctrl+R</string>
+     </property>
+    </action>
+   </widget>
  <resources/>
  <connections/>
 </ui>

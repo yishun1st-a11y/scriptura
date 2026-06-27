@@ -39,6 +39,8 @@ QString languageForFile(const QString &filePath)
         return "html";
     if (extension == "css" || extension == "scss" || extension == "sass" || extension == "less")
         return "css";
+    if (extension == "scr")
+        return "script";
 
     return "text";
 }
@@ -75,12 +77,14 @@ void CodeHighlighter::setLanguage(const QString &newLanguage)
         setupRust();
     else if (language == "go")
         setupGo();
-    else if (language == "shell")
+    if (language == "shell")
         setupShell();
     else if (language == "html")
         setupHtml();
     else if (language == "css")
         setupCss();
+    else if (language == "script")
+        setupScript();
     else
         setupPlainText();
 
@@ -143,7 +147,7 @@ void CodeHighlighter::highlightBlock(const QString &text)
         return;
     }
 
-    if (language == "c" || language == "cpp" || language == "java" || language == "javascript" || language == "typescript" || language == "rust" || language == "go" || language == "css") {
+    if (language == "c" || language == "cpp" || language == "java" || language == "javascript" || language == "typescript" || language == "rust" || language == "go" || language == "css" || language == "script") {
         handleCStyleBlockComment(text);
         if (inBlockComment)
             return;
@@ -396,6 +400,26 @@ void CodeHighlighter::setupCss()
     addRule("\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms)?\\b", numberFormat);
     addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
     addRule("'(?:\\\\.|[^'\\\\])*'", stringFormat);
+}
+
+void CodeHighlighter::setupScript()
+{
+    // Script language keywords: print, let, var, true, false
+    addRule("\\b(print|let|var|true|false)\\b", keywordFormat);
+    // Function calls (print is already highlighted as keyword)
+    addRule("\\b(?!print\\b)(?!let\\b)(?!var\\b)(?!true\\b)(?!false\\b)([A-Za-z_]\\w*)\\s*(?=\\()", functionFormat, 1);
+    // Variable declarations
+    addRule("\\b(let|var)\\s+([A-Za-z_]\\w*)", variableFormat, 2);
+    // Identifiers
+    addRule("\\b([A-Za-z_]\\w*)\\b", variableFormat);
+    // Numbers
+    addRule("\\b\\d+(?:\\.\\d+)?\\b", numberFormat);
+    // Strings
+    addRule("\"(?:\\\\.|[^\"\\\\])*\"", stringFormat);
+    // Comments
+    addRule("#[^\\n]*", commentFormat);
+    // Trailing spaces
+    addRule("[ \\t]+$", trailingSpaceFormat);
 }
 
 void CodeHighlighter::setupPlainText()

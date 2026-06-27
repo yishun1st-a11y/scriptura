@@ -48,8 +48,8 @@ private:
     void setupShell();
     void setupHtml();
     void setupCss();
-    void setupPlainText();
     void setupScript();
+    void setupPlainText();
 
     void handleCStyleBlockComment(const QString &text);
     void handlePythonTripleString(const QString &text);

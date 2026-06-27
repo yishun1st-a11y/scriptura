@@ -147,6 +147,16 @@ MainWindow::MainWindow(QWidget *parent)
     );
     ui->iconSideBar->layout()->addWidget(problemsButton);
 
+    runScriptButton = new QToolButton(this);
+    runScriptButton->setText("▶");
+    runScriptButton->setToolTip(tr("Run Script"));
+    runScriptButton->setStyleSheet(
+        "QToolButton { border: none; background: transparent; font-size: 18px; padding: 4px; }"
+        "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
+    );
+    ui->iconSideBar->layout()->addWidget(runScriptButton);
+    connect(runScriptButton, &QToolButton::clicked, this, &MainWindow::on_action_run_script_triggered);
+
     connect(fileTreeToggleButton, &QToolButton::clicked, this, [this](bool checked) {
         Q_UNUSED(checked);
         setSidebarCollapsed(!fileTreeToggleButton->isChecked());
@@ -174,6 +184,17 @@ MainWindow::MainWindow(QWidget *parent)
     // Add git panel at the bottom
     ui->editorLayout->addWidget(gitPanel);
     gitPanel->hide();
+
+    // Add output panel for Script compiler
+    outputPanel = new QPlainTextEdit(this);
+    outputPanel->setReadOnly(true);
+    outputPanel->setMaximumHeight(150);
+    outputPanel->setObjectName("outputPanel");
+    ui->editorLayout->addWidget(outputPanel);
+    outputPanel->hide();
+
+    // Initialize Script compiler
+    scriptCompiler = new ScriptLang::ScriptCompiler();
 
     ui->editorLayout->removeWidget(ui->tabWidget);
     editorStack = new QStackedWidget(this);
@@ -2017,4 +2038,88 @@ void MainWindow::onEditorTextChanged()
 
     QString uri = QUrl::fromLocalFile(currentFile).toString();
     lspClient->didChange(uri, editor->toPlainText());
+}
+
+void MainWindow::on_action_run_script_triggered()
+{
+    // If no file is open, open file dialog to select a .scr file
+    if (currentFile.isEmpty()) {
+        QString fileName = QFileDialog::getOpenFileName(this, tr("Open Script File"),
+            projectDir.isEmpty() ? QDir::homePath() : projectDir,
+            tr("Script Files (*.scr);;All Files (*)"));
+        if (fileName.isEmpty())
+            return;
+        
+        // Load the file directly
+        QFile file(fileName);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Error"), tr("Cannot open file: %1").arg(file.errorString()));
+            return;
+        }
+        
+        QTextStream in(&file);
+        QString content = in.readAll();
+        file.close();
+        
+        // Create editor for the file
+        CodeEditor *editor = new CodeEditor(this);
+        editor->setLanguageForFile(fileName);
+        QSettings settings;
+        QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
+        editor->setFont(savedFont);
+        editor->setTabWidth(settings.value("editor/tabWidth", editor->tabWidth()).toInt());
+        editor->setPlainText(content);
+        
+        int tabIndex = openFiles.size();
+        connect(editor, &QPlainTextEdit::modificationChanged, this,
+                [this, tabIndex](bool m) { updateTabModified(tabIndex, m); });
+        connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateStatusBar);
+        
+        openFiles.append({fileName, QFileInfo(fileName).fileName(), false});
+        showEditorInterface();
+        ui->tabWidget->addTab(editor, QFileInfo(fileName).fileName());
+        ui->tabWidget->setCurrentWidget(editor);
+        currentFile = fileName;
+        setWindowTitle(QFileInfo(fileName).fileName() + " - Scriptura");
+        showSearchBar(true);
+    }
+
+    QPlainTextEdit *editor = getCurrentEditor();
+    if (!editor) {
+        QMessageBox::warning(this, tr("Error"), tr("No file open to run."));
+        return;
+    }
+
+    // Check if current file is a .scr file
+    if (!currentFile.endsWith(".scr", Qt::CaseInsensitive)) {
+        QMessageBox::warning(this, tr("Error"), tr("Please save the file with .scr extension to run as Script language."));
+        return;
+    }
+
+    // Create output panel if not exists
+    if (!outputPanel) {
+        outputPanel = new QPlainTextEdit(this);
+        outputPanel->setReadOnly(true);
+        outputPanel->setMaximumHeight(150);
+        outputPanel->setObjectName("outputPanel");
+        ui->editorLayout->addWidget(outputPanel);
+        outputPanel->hide();
+    }
+
+    // Create compiler if not exists
+    if (!scriptCompiler) {
+        scriptCompiler = new ScriptLang::ScriptCompiler();
+    }
+
+    // Compile and run
+    QString source = editor->toPlainText();
+    QString output, error;
+    
+    if (scriptCompiler->compile(source, output, error)) {
+        outputPanel->setPlainText(output);
+        outputPanel->show();
+    } else {
+        outputPanel->setPlainText(tr("Error: %1").arg(error));
+        outputPanel->show();
+    }
 }

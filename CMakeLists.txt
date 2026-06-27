@@ -32,6 +32,8 @@ set(PROJECT_SOURCES
         gitpanel.cpp
         gitpanel.h
         splashscreen.h
+        scriptcompiler.cpp
+        scriptcompiler.h
         icon.png
 )
 
