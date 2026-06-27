@@ -30,7 +30,6 @@
 #include "problempanel.h"
 #include "todopanel.h"
 #include "gitpanel.h"
-#include "scriptcompiler.h"
 
 enum class ThemeColorFamily {
     Default = 0,
@@ -114,7 +113,6 @@ private slots:
     void on_action_editor_settings_triggered();
     void on_action_theme_triggered();
     void on_action_license_triggered();
-    void on_action_run_script_triggered();
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
@@ -140,7 +138,6 @@ private:
       QToolButton *fileTreeToggleButton;
       QToolButton *terminalButton;
       QToolButton *problemsButton;
-      QToolButton *runScriptButton;
       QLineEdit   *searchLineEdit;
      QPushButton *searchPrevBtn;
      QPushButton *searchNextBtn;
@@ -152,8 +149,6 @@ private:
      ProblemPanel *problemPanel;
       TodoPanel    *todoPanel;
       GitPanel     *gitPanel;
-      QPlainTextEdit *outputPanel;
-      ScriptLang::ScriptCompiler *scriptCompiler;
       Theme selectedTheme;
 
     QTimer *autoSaveTimer;
