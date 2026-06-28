@@ -157,12 +157,13 @@ private:
 
     QTimer *autoSaveTimer;
     QTimer *lspDebounceTimer;
-    LspClient *lspClient;
     QStringList recentProjects;
     int maxRecentProjects = 10;
     QStringList m_languageServers; // Configured language servers
     Updater *updater;
     ConfigValidator *configValidator;
+    LspClient *lspClient;
+    int m_previousEditorStackIndex; // Remember which view to restore (welcome or editor)
 
     void updateCursorPosition();
     void updateStatusBar();

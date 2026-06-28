@@ -1,5 +1,6 @@
 #include "codeeditor.h"
 
+#include <cmath>
 #include <QColor>
 #include <QFileInfo>
 #include <QFont>
@@ -624,7 +625,7 @@ void CodeEditor::drawIndentGuides(QPaintEvent *event)
                     if (c == QLatin1Char(' ')) {
                         width += fontMetrics().horizontalAdvance(QLatin1Char(' '));
                     } else if (c == QLatin1Char('\t')) {
-                        width = (qFloor(width / tabStop) + 1) * tabStop;
+                        width = (std::floor(width / tabStop) + 1) * tabStop;
                     } else {
                         break;
                     }

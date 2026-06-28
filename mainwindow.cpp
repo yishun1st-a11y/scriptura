@@ -1,7 +1,7 @@
 #include <QShortcut>
 #include <QCloseEvent>
 #include "mainwindow.h"
-#include "./ui_mainwindow.h"
+#include "ui_mainwindow.h"
 #include "codeeditor.h"
 #include "todopanel.h"
 #include "gitpanel.h"
@@ -48,13 +48,13 @@ MainWindow::MainWindow(QWidget *parent)
     , selectedTheme(ThemeColorFamily::Default, ThemeMode::Light)
     , autoSaveTimer(new QTimer(this))
     , lspDebounceTimer(new QTimer(this))
-    , lspClient(new LspClient(this))
     , problemPanel(new ProblemPanel(this))
     , todoPanel(new TodoPanel(this))
     , gitPanel(new GitPanel(this))
     , terminalPanel(new TerminalPanel(this))
     , updater(new Updater(this))
     , configValidator(new ConfigValidator(this))
+    , lspClient(new LspClient(this))
 {
     ui->setupUi(this);
 
@@ -176,23 +176,20 @@ MainWindow::MainWindow(QWidget *parent)
     ui->editorLayout->addWidget(problemPanel);
     problemPanel->hide();
 
-    // Add todo panel at the bottom
-    ui->editorLayout->addWidget(todoPanel);
-    todoPanel->hide();
-
     // Add git panel at the bottom
     ui->editorLayout->addWidget(gitPanel);
     gitPanel->hide();
-
-    // Add terminal panel at the bottom
-    ui->editorLayout->addWidget(terminalPanel);
-    terminalPanel->hide();
 
     ui->editorLayout->removeWidget(ui->tabWidget);
     editorStack = new QStackedWidget(this);
     welcomeWidget = createWelcomeWidget();
     editorStack->addWidget(welcomeWidget);
     editorStack->addWidget(ui->tabWidget);
+    
+    // Add todo and terminal panels to the stack for full replacement
+    editorStack->addWidget(todoPanel);
+    editorStack->addWidget(terminalPanel);
+    
     ui->editorLayout->addWidget(editorStack);
     showWelcomeScreen();
 
@@ -805,11 +802,14 @@ void MainWindow::on_action_new_window_triggered()
 
 void MainWindow::toggleTerminalPanel()
 {
-    if (terminalPanel->isVisible()) {
-        terminalPanel->hide();
+    if (editorStack->currentWidget() == terminalPanel) {
+        // Terminal is currently shown, restore previous view
+        editorStack->setCurrentIndex(m_previousEditorStackIndex);
         terminalButton->setChecked(false);
     } else {
-        terminalPanel->show();
+        // Show terminal, replacing the editor
+        m_previousEditorStackIndex = editorStack->currentIndex();
+        editorStack->setCurrentWidget(terminalPanel);
         terminalButton->setChecked(true);
         if (!terminalPanel->isRunning()) {
             terminalPanel->startShell(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
@@ -1072,7 +1072,7 @@ void MainWindow::on_action_theme_triggered()
         currentTheme.features = features;
     };
 
-    connect(familyBtnGroup, &QButtonGroup::buttonClicked, [&](QAbstractButton *button) {
+    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
         currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
         currentTheme.mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
         currentTheme.features = hcCheckbox->isChecked() ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures();
@@ -1316,7 +1316,6 @@ void MainWindow::updateFamilyButtonPreview(QPushButton *btn, ThemeColorFamily fa
     if (features.testFlag(ThemeFeature::HighContrast))
         applyHighContrastPalette(p, family, mode);
 
-    bool isDark = (mode == ThemeMode::Dark);
     QColor bg = p.color(QPalette::Window);
     QColor accent = highContrastAccentColor(family, mode);
 
@@ -2089,12 +2088,17 @@ void MainWindow::on_action_git_push_triggered()
     gitPanel->show();
 }
 
-void MainWindow::on_placeholderButton_clicked(bool checked)
+void MainWindow::on_placeholderButton_clicked(bool /*checked*/)
 {
-    if (checked) {
-        todoPanel->show();
+    if (editorStack->currentWidget() == todoPanel) {
+        // Todo panel is currently shown, restore previous view
+        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        placeholderButton->setChecked(false);
     } else {
-        todoPanel->hide();
+        // Show todo panel, replacing the editor
+        m_previousEditorStackIndex = editorStack->currentIndex();
+        editorStack->setCurrentWidget(todoPanel);
+        placeholderButton->setChecked(true);
     }
 }
 

@@ -40,10 +40,11 @@ static void writeCrashDumpSafe(int sig) {
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) {
         const char *header = "Scriptura Crash Report\nStack trace:\n";
-        write(fd, header, strlen(header));
+        ssize_t written = write(fd, header, strlen(header));
+        Q_UNUSED(written)
         for (int i = 0; i < nptrs && strings; i++) {
-            write(fd, strings[i], strlen(strings[i]));
-            write(fd, "\n", 1);
+            written = write(fd, strings[i], strlen(strings[i]));
+            written = write(fd, "\n", 1);
         }
         close(fd);
     }
@@ -65,10 +66,11 @@ static void writeCrashDumpSafe(int sig) {
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) {
         const char *header = "Scriptura Crash Report\nStack trace:\n";
-        write(fd, header, strlen(header));
+        ssize_t written = write(fd, header, strlen(header));
+        Q_UNUSED(written)
         for (int i = 0; i < nptrs && strings; i++) {
-            write(fd, strings[i], strlen(strings[i]));
-            write(fd, "\n", 1);
+            written = write(fd, strings[i], strlen(strings[i]));
+            written = write(fd, "\n", 1);
         }
         close(fd);
     }
