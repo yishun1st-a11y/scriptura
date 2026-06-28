@@ -2,6 +2,12 @@
 
 ![Scriptura Icon](icon.png)
 
+[![Storage](https://img.shields.io/github/repo-size/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura)
+[![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/stargazers)
+[![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/network/members)
+
+![Star History](https://api.star-history.com/svg?repos=jason1015-coder/scriptura&type=Date)
+
 A simple Qt-based text editor with project file browsing.
 
 ## Features
@@ -53,5 +59,3 @@ Automated builds are available for Linux, macOS, and Windows via GitHub Actions.
 ## License
 
 MIT License - see LICENSE file
-
-
