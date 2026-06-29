@@ -33,14 +33,29 @@ A simple Qt-based text editor with project file browsing.
 
 ## Building
 
+### Quick Build (Debug)
 ```bash
 ./build.sh
 ```
 
-Or manually:
+### Build with Deployment (Release)
 ```bash
-cmake -B build/Desktop-Debug -S .
-cmake --build build/Desktop-Debug
+# Linux/macOS - builds and deploys with Qt dependencies
+./build.sh Release --deploy
+
+# Windows - builds and deploys with Qt dependencies
+build.bat Release --deploy
+```
+
+### Manual Build
+```bash
+# Debug build
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+
+# Release build
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
 ## Running
@@ -54,9 +69,38 @@ Or directly:
 ./build/Desktop-Debug/scriptura
 ```
 
+## Deployment
+
+The build scripts now support automatic deployment with the `--deploy` flag. This will bundle all Qt dependencies (DLLs, libraries, plugins) automatically.
+
+### Quick Deployment
+
+**Linux:**
+```bash
+./build.sh Release --deploy
+```
+
+**macOS:**
+```bash
+./build.sh Release --deploy
+```
+
+**Windows:**
+```batch
+build.bat Release --deploy
+```
+
+### Manual Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions including:
+- Building release versions
+- Bundling Qt DLLs/libraries with windeployqt, linuxdeployqt, and macdeployqt
+- Creating distributable packages (ZIP, AppImage, DMG)
+- Troubleshooting common deployment issues
+
 ## Requirements
 
-- Qt 5 or Qt 6 (with Widgets module)
+- Qt 5 or Qt 6 (with Widgets, Network, and LinguistTools modules)
 - CMake 3.16+
 - C++17 compiler
 
