@@ -1,4 +1,4 @@
-name: Build Scriptura
+ityname: Build Scriptura
 
 on:
   push:
@@ -68,9 +68,40 @@ jobs:
           host: windows
           target: desktop
           arch: win64_msvc2022_64
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
       - name: Configure (MSVC)
         run: cmake -B build -S . -A x64 -DCMAKE_INSTALL_PREFIX=build/install
-      - name: Build and Deploy
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Add Qt to PATH
+        shell: powershell
+        run: |
+          # Find Qt installation and add to PATH
+          $qtBin = Get-ChildItem -Path "C:\Qt" -Filter "windeployqt.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($qtBin) {
+            $binDir = Split-Path $qtBin.DirectoryName -Parent
+            Write-Host "Adding Qt bin to PATH: $binDir"
+            $env:Path = "$binDir;$env:Path"
+            echo "QT_BIN_DIR=$binDir" >> $env:GITHUB_ENV
+          } else {
+            Write-Host "Qt bin directory not found, checking environment..."
+            # Check if Qt6_DIR is set
+            if ($env:Qt6_DIR) {
+              $binDir = Join-Path (Split-Path $env:Qt6_DIR -Parent) "bin"
+              Write-Host "Using Qt6_DIR: $binDir"
+              $env:Path = "$binDir;$env:Path"
+              echo "QT_BIN_DIR=$binDir" >> $env:GITHUB_ENV
+            }
+          }
+      - name: Debug Qt environment
+        shell: powershell
+        run: |
+          Write-Host "PATH: $env:Path"
+          Write-Host "QT_BIN_DIR: $env:QT_BIN_DIR"
+          Write-Host "Qt6_DIR: $env:Qt6_DIR"
+          Get-Command windeployqt -ErrorAction SilentlyContinue
+      - name: Deploy
         run: deploy-windows.bat
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4

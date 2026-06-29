@@ -10,30 +10,57 @@ set DEPLOY_DIR=deploy
 echo === Scriptura Windows Deployment ===
 echo.
 
-REM Check if windeployqt is available
+REM Check if windeployqt is available, try to locate it if not in PATH
 where windeployqt >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
-    echo ERROR: windeployqt not found in PATH
-    echo Please ensure Qt is installed and windeployqt is in your PATH
-    exit /b 1
+    echo windeployqt not found in PATH, attempting to locate it...
+    REM Try QT_BIN_DIR environment variable (set by install-qt-action)
+    if defined QT_BIN_DIR (
+        if exist "%QT_BIN_DIR%\windeployqt.exe" (
+            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
+            set PATH=%QT_BIN_DIR%;%PATH%
+            goto windeployqt_found
+        )
+    )
+    REM Try Qt6_DIR environment variable (set by install-qt-action)
+    if defined Qt6_DIR (
+        for /f "delims=" %%i in ('dir /b /s "%Qt6_DIR%\..\..\bin\windeployqt.exe" 2^>nul') do set QT_BIN_DIR=%%i
+        if defined QT_BIN_DIR (
+            for %%a in ("%QT_BIN_DIR%") do set QT_BIN_DIR=%%~dpna
+            echo Found windeployqt at: %QT_BIN_DIR%
+            set PATH=%QT_BIN_DIR%;%PATH%
+            goto windeployqt_found
+        )
+    )
+    REM Try to find Qt bin directory using qt6-qmake
+    where qt6-qmake >nul 2>nul
+    if %ERRORLEVEL% EQU 0 (
+        for /f "delims=" %%i in ('qt6-qmake -query QT_INSTALL_BINS') do set QT_BIN_DIR=%%i
+        if exist "%QT_BIN_DIR%\windeployqt.exe" (
+            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
+            set PATH=%QT_BIN_DIR%;%PATH%
+            goto windeployqt_found
+        )
+    )
+    REM Try qmake as fallback
+    where qmake >nul 2>nul
+    if %ERRORLEVEL% EQU 0 (
+        for /f "delims=" %%i in ('qmake -query QT_INSTALL_BINS') do set QT_BIN_DIR=%%i
+        if exist "%QT_BIN_DIR%\windeployqt.exe" (
+            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
+            set PATH=%QT_BIN_DIR%;%PATH%
+            goto windeployqt_found
+        )
+    )
+    REM Final check
+    where windeployqt >nul 2>nul
+    if %ERRORLEVEL% NEQ 0 (
+        echo ERROR: windeployqt not found
+        echo Please ensure Qt is installed and windeployqt is in your PATH
+        exit /b 1
+    )
 )
-
-REM Create build directory if it doesn't exist
-if not exist "%BUILD_DIR%" (
-    echo Creating build directory...
-    cmake -B "%BUILD_DIR%" -S . -A x64
-)
-
-REM Build the project
-echo.
-echo Building project...
-cmake --build "%BUILD_DIR%" --config Release
-
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo ERROR: Build failed
-    exit /b 1
-)
+:windeployqt_found
 
 REM Determine executable path (handles both single-config and multi-config generators)
 set EXE_PATH=
@@ -43,6 +70,8 @@ if exist "%BUILD_DIR%\Release\scriptura.exe" (
     set EXE_PATH=%BUILD_DIR%\scriptura.exe
 ) else (
     echo ERROR: scriptura.exe not found in build directory
+    echo Build directory contents:
+    dir "%BUILD_DIR%"
     exit /b 1
 )
 
