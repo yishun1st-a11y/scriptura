@@ -6,7 +6,15 @@
 [![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/stargazers)
 [![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/network/members)
 
-![Star History](https://api.star-history.com/svg?repos=jason1015-coder/scriptura&type=Date)
+## Star History
+
+<a href="https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left" />
+ </picture>
+</a>
 
 A simple Qt-based text editor with project file browsing.
 
