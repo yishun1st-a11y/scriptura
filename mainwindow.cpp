@@ -162,7 +162,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(terminalButton, &QToolButton::clicked, this, &MainWindow::toggleTerminalPanel);
     connect(problemsButton, &QToolButton::clicked, this, &MainWindow::toggleProblemPanel);
-     connect(placeholderButton, &QToolButton::toggled, this, &MainWindow::on_placeholderButton_clicked);
+    connect(placeholderButton, &QToolButton::toggled, this, &MainWindow::on_placeholderButton_clicked);
 
      connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
 
@@ -811,6 +811,18 @@ void MainWindow::toggleTerminalPanel()
         m_previousEditorStackIndex = editorStack->currentIndex();
         editorStack->setCurrentWidget(terminalPanel);
         terminalButton->setChecked(true);
+        // Close other panels that occupy the same area (block signals to prevent recursion)
+        if (placeholderButton->isChecked()) {
+            QSignalBlocker blocker(placeholderButton);
+            placeholderButton->setChecked(false);
+        }
+        if (problemPanel->isVisible()) {
+            problemPanel->hide();
+            problemsButton->setChecked(false);
+        }
+        if (gitPanel->isVisible()) {
+            gitPanel->hide();
+        }
         if (!terminalPanel->isRunning()) {
             terminalPanel->startShell(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
         } else {
@@ -2034,6 +2046,19 @@ void MainWindow::toggleProblemPanel()
     } else {
         problemPanel->show();
         problemsButton->setChecked(true);
+        // Close other panels that occupy the same area (block signals to prevent recursion)
+        if (terminalButton->isChecked()) {
+            QSignalBlocker blocker(terminalButton);
+            terminalButton->setChecked(false);
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
+        if (placeholderButton->isChecked()) {
+            QSignalBlocker blocker(placeholderButton);
+            placeholderButton->setChecked(false);
+        }
+        if (gitPanel->isVisible()) {
+            gitPanel->hide();
+        }
         // Update with current file's problems
         if (!currentFile.isEmpty()) {
             QString uri = QUrl::fromLocalFile(currentFile).toString();
@@ -2063,6 +2088,20 @@ void MainWindow::on_action_git_commit_triggered()
         } else {
             gitPanel->setOutput(tr("Failed to run git commit. The operation may have timed out."));
         }
+        // Close other panels that occupy the same area (block signals to prevent recursion)
+        if (terminalButton->isChecked()) {
+            QSignalBlocker blocker(terminalButton);
+            terminalButton->setChecked(false);
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
+        if (placeholderButton->isChecked()) {
+            QSignalBlocker blocker(placeholderButton);
+            placeholderButton->setChecked(false);
+        }
+        if (problemPanel->isVisible()) {
+            problemPanel->hide();
+            problemsButton->setChecked(false);
+        }
         gitPanel->show();
     }
 }
@@ -2085,20 +2124,44 @@ void MainWindow::on_action_git_push_triggered()
     } else {
         gitPanel->setOutput(tr("Failed to run git push. The operation may have timed out."));
     }
+    // Close other panels that occupy the same area (block signals to prevent recursion)
+    if (terminalButton->isChecked()) {
+        QSignalBlocker blocker(terminalButton);
+        terminalButton->setChecked(false);
+        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+    }
+    if (placeholderButton->isChecked()) {
+        QSignalBlocker blocker(placeholderButton);
+        placeholderButton->setChecked(false);
+    }
+    if (problemPanel->isVisible()) {
+        problemPanel->hide();
+        problemsButton->setChecked(false);
+    }
     gitPanel->show();
 }
 
-void MainWindow::on_placeholderButton_clicked(bool /*checked*/)
+void MainWindow::on_placeholderButton_clicked(bool checked)
 {
-    if (editorStack->currentWidget() == todoPanel) {
-        // Todo panel is currently shown, restore previous view
-        editorStack->setCurrentIndex(m_previousEditorStackIndex);
-        placeholderButton->setChecked(false);
-    } else {
+    if (checked) {
         // Show todo panel, replacing the editor
         m_previousEditorStackIndex = editorStack->currentIndex();
+        // Close other panels that occupy the same area (block signals to prevent recursion)
+        if (editorStack->currentWidget() == terminalPanel) {
+            QSignalBlocker blocker(terminalButton);
+            terminalButton->setChecked(false);
+        }
+        if (problemPanel->isVisible()) {
+            problemPanel->hide();
+            problemsButton->setChecked(false);
+        }
+        if (gitPanel->isVisible()) {
+            gitPanel->hide();
+        }
         editorStack->setCurrentWidget(todoPanel);
-        placeholderButton->setChecked(true);
+    } else {
+        // Todo panel was unchecked, restore previous view
+        editorStack->setCurrentIndex(m_previousEditorStackIndex);
     }
 }
 
