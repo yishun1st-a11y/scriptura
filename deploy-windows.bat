@@ -26,7 +26,7 @@ if %ERRORLEVEL% NEQ 0 (
     if defined Qt6_DIR (
         for /f "delims=" %%i in ('dir /b /s "%Qt6_DIR%\..\..\bin\windeployqt.exe" 2^>nul') do set QT_BIN_DIR=%%i
         if defined QT_BIN_DIR (
-            for %%a in ("%QT_BIN_DIR%") do set QT_BIN_DIR=%%~dpna
+            for %%a in ("%QT_BIN_DIR%") do set QT_BIN_DIR=%%~dpa
             echo Found windeployqt at: %QT_BIN_DIR%
             set PATH=%QT_BIN_DIR%;%PATH%
             goto windeployqt_found
@@ -114,4 +114,4 @@ echo.
 echo === Deployment Complete ===
 echo Executable and dependencies are in: %DEPLOY_DIR%\
 echo Distribution archive: scriptura-windows.zip
-echo.
+echo.

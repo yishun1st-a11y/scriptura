@@ -80,7 +80,7 @@ jobs:
           # Find Qt installation and add to PATH
           $qtBin = Get-ChildItem -Path "C:\Qt" -Filter "windeployqt.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($qtBin) {
-            $binDir = Split-Path $qtBin.DirectoryName -Parent
+            $binDir = $qtBin.DirectoryName
             Write-Host "Adding Qt bin to PATH: $binDir"
             $env:Path = "$binDir;$env:Path"
             Add-Content -Path $env:GITHUB_ENV -Value "QT_BIN_DIR=$binDir" -Encoding utf8
