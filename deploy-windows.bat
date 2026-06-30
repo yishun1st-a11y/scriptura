@@ -114,4 +114,4 @@ echo.
 echo === Deployment Complete ===
 echo Executable and dependencies are in: %DEPLOY_DIR%\
 echo Distribution archive: scriptura-windows.zip
-echo.
+echo.
