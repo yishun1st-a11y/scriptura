@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal EnableDelayedExpansion
 
 REM Windows deployment script for Scriptura
 REM This script builds the project and bundles all Qt DLLs using windeployqt
@@ -16,9 +16,9 @@ if %ERRORLEVEL% NEQ 0 (
     echo windeployqt not found in PATH, attempting to locate it...
     REM Try QT_BIN_DIR environment variable (set by install-qt-action)
     if defined QT_BIN_DIR (
-        if exist "%QT_BIN_DIR%\windeployqt.exe" (
-            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
-            set PATH=%QT_BIN_DIR%;%PATH%
+        if exist "!QT_BIN_DIR!\windeployqt.exe" (
+            echo Found windeployqt at: !QT_BIN_DIR!\windeployqt.exe
+            set "PATH=!QT_BIN_DIR!;!PATH!"
             goto windeployqt_found
         )
     )
@@ -26,9 +26,9 @@ if %ERRORLEVEL% NEQ 0 (
     if defined Qt6_DIR (
         for /f "delims=" %%i in ('dir /b /s "%Qt6_DIR%\..\..\bin\windeployqt.exe" 2^>nul') do set QT_BIN_DIR=%%i
         if defined QT_BIN_DIR (
-            for %%a in ("%QT_BIN_DIR%") do set QT_BIN_DIR=%%~dpa
-            echo Found windeployqt at: %QT_BIN_DIR%
-            set PATH=%QT_BIN_DIR%;%PATH%
+            for %%a in ("!QT_BIN_DIR!") do set "QT_BIN_DIR=%%~dpa"
+            echo Found windeployqt at: !QT_BIN_DIR!
+            set "PATH=!QT_BIN_DIR!;!PATH!"
             goto windeployqt_found
         )
     )
@@ -36,19 +36,21 @@ if %ERRORLEVEL% NEQ 0 (
     where qt6-qmake >nul 2>nul
     if %ERRORLEVEL% EQU 0 (
         for /f "delims=" %%i in ('qt6-qmake -query QT_INSTALL_BINS') do set QT_BIN_DIR=%%i
-        if exist "%QT_BIN_DIR%\windeployqt.exe" (
-            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
-            set PATH=%QT_BIN_DIR%;%PATH%
-            goto windeployqt_found
+        if defined QT_BIN_DIR (
+            if exist "!QT_BIN_DIR!\windeployqt.exe" (
+                echo Found windeployqt at: !QT_BIN_DIR!\windeployqt.exe
+                set "PATH=!QT_BIN_DIR!;!PATH!"
+                goto windeployqt_found
+            )
         )
     )
     REM Try qmake as fallback
     where qmake >nul 2>nul
     if %ERRORLEVEL% EQU 0 (
         for /f "delims=" %%i in ('qmake -query QT_INSTALL_BINS') do set QT_BIN_DIR=%%i
-        if exist "%QT_BIN_DIR%\windeployqt.exe" (
-            echo Found windeployqt at: %QT_BIN_DIR%\windeployqt.exe
-            set PATH=%QT_BIN_DIR%;%PATH%
+        if exist "!QT_BIN_DIR!\windeployqt.exe" (
+            echo Found windeployqt at: !QT_BIN_DIR!\windeployqt.exe
+            set "PATH=!QT_BIN_DIR!;!PATH!"
             goto windeployqt_found
         )
     )
@@ -64,18 +66,18 @@ if %ERRORLEVEL% NEQ 0 (
 
 REM Determine executable path (handles both single-config and multi-config generators)
 set EXE_PATH=
-if exist "%BUILD_DIR%\Release\scriptura.exe" (
-    set EXE_PATH=%BUILD_DIR%\Release\scriptura.exe
-) else if exist "%BUILD_DIR%\scriptura.exe" (
-    set EXE_PATH=%BUILD_DIR%\scriptura.exe
+if exist "!BUILD_DIR!\Release\scriptura.exe" (
+    set "EXE_PATH=!BUILD_DIR!\Release\scriptura.exe"
+) else if exist "!BUILD_DIR!\scriptura.exe" (
+    set "EXE_PATH=!BUILD_DIR!\scriptura.exe"
 ) else (
     echo ERROR: scriptura.exe not found in build directory
     echo Build directory contents:
-    dir "%BUILD_DIR%"
+    dir "!BUILD_DIR!"
     exit /b 1
 )
 
-echo Found executable: %EXE_PATH%
+echo Found executable: !EXE_PATH!
 
 REM Create deployment directory
 echo.
@@ -85,12 +87,12 @@ mkdir "%DEPLOY_DIR%"
 
 REM Copy the executable
 echo Copying executable...
-copy /Y "%EXE_PATH%" "%DEPLOY_DIR%\"
+copy /Y "!EXE_PATH!" "!DEPLOY_DIR!\"
 
 REM Run windeployqt to bundle Qt DLLs
 echo.
 echo Deploying Qt dependencies...
-windeployqt --release --dir "%DEPLOY_DIR%" "%EXE_PATH%"
+windeployqt --release --dir "%DEPLOY_DIR%" "!EXE_PATH!"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
