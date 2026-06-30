@@ -102,6 +102,7 @@ jobs:
           Write-Host "Qt6_DIR: $env:Qt6_DIR"
           Get-Command windeployqt -ErrorAction SilentlyContinue
       - name: Deploy
+        shell: cmd
         run: deploy-windows.bat
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
