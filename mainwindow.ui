@@ -39,16 +39,6 @@
          </widget>
        </item>
        <item>
-        <widget class="QToolButton" name="pluginButton">
-         <property name="text">
-          <string>🔌</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QToolButton" name="placeholderButton">
          <property name="text">
           <string>🔖</string>
