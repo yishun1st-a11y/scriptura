@@ -12,7 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get install -y cmake g++ qt6-base-dev qt6-core-dev qt6-widgets-dev qt6-network-dev
+        run: |
+          apt-get update
+          apt-get install -y cmake g++ qt6-base-dev qt6-widgets-dev qt6-network-dev
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
       - name: Build
