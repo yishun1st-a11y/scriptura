@@ -5,7 +5,7 @@
 [![Storage](https://img.shields.io/github/repo-size/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura)
 [![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/stargazers)
 [![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/network/members)
-
+[![Build Scriptura](https://github.com/jason1015-coder/scriptura/actions/workflows/build.yml/badge.svg)](https://github.com/jason1015-coder/scriptura/actions/workflows/build.yml)
 
 A simple Qt-based text editor with project file browsing.
 
