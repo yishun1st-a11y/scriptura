@@ -2,7 +2,7 @@
 set -e
 
 # macOS deployment script for Scriptura
-# This script builds the project and creates a macOS app bundle with macdeployqt
+# This script builds the project and packages the app bundle
 
 BUILD_DIR="build"
 DEPLOY_DIR="deploy"
@@ -10,13 +10,6 @@ APP_NAME="Scriptura.app"
 
 echo "=== Scriptura macOS Deployment ==="
 echo
-
-# Check if macdeployqt is installed
-if ! command -v macdeployqt &> /dev/null; then
-    echo "ERROR: macdeployqt not found in PATH"
-    echo "Please ensure Qt is installed and macdeployqt is in your PATH"
-    exit 1
-fi
 
 # Create build directory if it doesn't exist
 if [ ! -d "$BUILD_DIR" ]; then
@@ -55,17 +48,6 @@ fi
 # Copy the app bundle to deployment directory
 echo "Copying app bundle..."
 cp -R "$APP_BUNDLE" "$DEPLOY_DIR/"
-
-# Run macdeployqt to bundle Qt frameworks and libraries
-echo
-echo "Deploying Qt dependencies with macdeployqt..."
-macdeployqt "$DEPLOY_DIR/$APP_NAME" -always-overwrite
-
-if [ $? -ne 0 ]; then
-    echo
-    echo "ERROR: macdeployqt failed"
-    exit 1
-fi
 
 # Copy additional resources
 echo

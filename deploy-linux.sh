@@ -3,7 +3,6 @@ set -e
 
 # Linux deployment script for Scriptura
 # This script builds the project and packages the executable
-# Linux does not bundle Qt libraries - users should install Qt via their package manager
 
 BUILD_DIR="build"
 DEPLOY_DIR="deploy"
@@ -56,6 +55,3 @@ echo
 echo "=== Deployment Complete ==="
 echo "Executable is in: $DEPLOY_DIR/"
 echo "Distribution archive: scriptura-linux.tar.gz"
-echo
-echo "Note: Linux does not bundle Qt libraries."
-echo "Ensure Qt6 (Core, Widgets, Network, Gui) is installed on the target system."
