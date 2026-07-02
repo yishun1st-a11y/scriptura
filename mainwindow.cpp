@@ -58,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
     , updater(new Updater(this))
     , configValidator(new ConfigValidator(this))
     , lspClient(new LspClient(this))
+    , m_previousEditorStackIndex(0)
 {
     ui->setupUi(this);
 
@@ -258,7 +259,9 @@ MainWindow::MainWindow(QWidget *parent)
             if (terminalButton->isChecked()) {
                 QSignalBlocker blocker(terminalButton);
                 terminalButton->setChecked(false);
-                editorStack->setCurrentIndex(m_previousEditorStackIndex);
+                if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+                    editorStack->setCurrentIndex(m_previousEditorStackIndex);
+                }
             }
             if (problemPanel->isVisible()) {
                 problemPanel->hide();
@@ -1284,7 +1287,9 @@ void MainWindow::on_action_new_window_triggered()
 void MainWindow::toggleTerminalPanel()
 {
     if (editorStack->currentWidget() == terminalPanel) {
-        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
         terminalButton->setChecked(false);
     } else {
         m_previousEditorStackIndex = editorStack->currentIndex();
@@ -1446,7 +1451,9 @@ void MainWindow::toggleTodoPanel()
             gitButton->setChecked(false);
         }
     } else {
-        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
     }
 }
 
@@ -1464,7 +1471,9 @@ void MainWindow::toggleProblemPanel()
         if (terminalButton->isChecked()) {
             QSignalBlocker blocker(terminalButton);
             terminalButton->setChecked(false);
-            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+            if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+                editorStack->setCurrentIndex(m_previousEditorStackIndex);
+            }
         }
         if (gitButton->isChecked()) {
             QSignalBlocker blocker(gitButton);
@@ -2930,7 +2939,9 @@ void MainWindow::on_action_git_commit_triggered()
         if (terminalButton->isChecked()) {
             QSignalBlocker blocker(terminalButton);
             terminalButton->setChecked(false);
-            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+            if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+                editorStack->setCurrentIndex(m_previousEditorStackIndex);
+            }
         }
         if (placeholderButton->isChecked()) {
             QSignalBlocker blocker(placeholderButton);
@@ -2966,7 +2977,9 @@ void MainWindow::on_action_git_push_triggered()
     if (terminalButton->isChecked()) {
         QSignalBlocker blocker(terminalButton);
         terminalButton->setChecked(false);
-        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
     }
     if (placeholderButton->isChecked()) {
         QSignalBlocker blocker(placeholderButton);
@@ -2999,7 +3012,9 @@ void MainWindow::on_placeholderButton_clicked(bool checked)
         editorStack->setCurrentWidget(todoPanel);
     } else {
         // Todo panel was unchecked, restore previous view
-        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        if (m_previousEditorStackIndex >= 0 && m_previousEditorStackIndex < editorStack->count()) {
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
     }
 }
 
