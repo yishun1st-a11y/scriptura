@@ -684,8 +684,9 @@ void CodeEditor::updateLineNumberArea(const QRect &rect, int dy)
 
 void CodeEditor::highlightCurrentLine()
 {
-    QList<QTextEdit::ExtraSelection> extraSelections;
-
+    // Preserve existing selections (like diagnostics) and add/update current line highlight
+    QList<QTextEdit::ExtraSelection> extraSelections = m_diagnosticSelections;
+    
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection selection;
         QColor lineColor = palette().color(QPalette::Highlight);
@@ -694,7 +695,18 @@ void CodeEditor::highlightCurrentLine()
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
         selection.cursor = textCursor();
         selection.cursor.clearSelection();
-        extraSelections.append(selection);
+        
+        // Replace existing line highlight if present
+        bool found = false;
+        for (int i = 0; i < extraSelections.size(); ++i) {
+            if (extraSelections[i].format.hasProperty(QTextFormat::FullWidthSelection)) {
+                extraSelections[i] = selection;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            extraSelections.prepend(selection);
     }
 
     setExtraSelections(extraSelections);
@@ -732,7 +744,7 @@ void CodeEditor::setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags)
     QList<QTextEdit::ExtraSelection> selections;
     QList<QTextEdit::ExtraSelection> existing = extraSelections();
 
-    // Keep current line highlight
+    // Keep current line highlight (first selection with FullWidthSelection)
     for (const QTextEdit::ExtraSelection &sel : existing) {
         if (sel.format.hasProperty(QTextFormat::FullWidthSelection)) {
             selections.append(sel);

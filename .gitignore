@@ -71,12 +71,13 @@ CMakeLists.txt.user*
 *.exe
 
 # Directories with generated files
-.moc/
-.obj/
-.pch/
-.rcc/
-.uic/
-/build*/
+ .moc/
+ .obj/
+ .pch/
+ .rcc/
+ .uic/
+ /build*/
+ /cmake-build-*/
 
 # Qt autogen
 *_autogen/

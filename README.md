@@ -29,13 +29,9 @@ A simple Qt-based text editor with project file browsing.
 ./build.sh
 ```
 
-### Build with Deployment (Release)
+### Build (Release)
 ```bash
-# Linux/macOS - builds and deploys with Qt dependencies
-./build.sh Release --deploy
-
-# Windows - builds and deploys with Qt dependencies
-build.bat Release --deploy
+./build.sh Release
 ```
 
 ### Manual Build
@@ -57,28 +53,7 @@ cmake --build build --config Release
 
 Or directly:
 ```bash
-./build/Desktop-Debug/scriptura
-```
-
-## Deployment
-
-The build scripts now support automatic deployment with the `--deploy` flag. This will bundle all Qt dependencies (DLLs, libraries, plugins) automatically on Windows and macOS. Linux does not bundle Qt libraries and relies on system packages.
-
-### Quick Deployment
-
-**Linux:**
-```bash
-./build.sh Release --deploy
-```
-
-**macOS:**
-```bash
-./build.sh Release --deploy
-```
-
-**Windows:**
-```batch
-build.bat Release --deploy
+./cmake-build-Debug/scriptura
 ```
 
 ## Requirements

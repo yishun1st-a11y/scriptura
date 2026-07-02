@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BUILD_DIR="cmake-build-debug"
+BUILD_DIR="cmake-build-Debug"
 
 if [ ! -f "$BUILD_DIR/scriptura" ]; then
     echo "Building first..."

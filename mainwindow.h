@@ -25,6 +25,7 @@
 #include <QCheckBox>
 #include <QGroupBox>
 #include <QGridLayout>
+#include <QTabBar>
 #include "codeeditor.h"
 #include "lspclient.h"
 #include "problempanel.h"
@@ -129,6 +130,10 @@ private slots:
     void onEditorTextChanged();
     void on_placeholderButton_clicked(bool checked);
 
+    void toggleSidebar();
+    void onBottomTabChanged(int index);
+    void onTopTabChanged(int index);
+
 private:
     Ui::MainWindow *ui;
     QString currentFile;
@@ -137,37 +142,48 @@ private:
     QList<OpenFile> openFiles;
     QFileSystemModel *fileModel;
     QToolButton *goUpButton;
-      QToolButton *placeholderButton;
-      QToolButton *fileTreeToggleButton;
-      QToolButton *terminalButton;
-      QToolButton *problemsButton;
-      QLineEdit   *searchLineEdit;
-     QPushButton *searchPrevBtn;
-     QPushButton *searchNextBtn;
-     QLabel      *searchCountLabel;
-     QWidget     *searchBarWidget;
-     QWidget     *welcomeWidget;
-     QVBoxLayout *recentProjectsLayout;
-     QStackedWidget *editorStack;
-   ProblemPanel *problemPanel;
-      TodoPanel    *todoPanel;
-      GitPanel     *gitPanel;
-      TerminalPanel *terminalPanel;
-      Theme selectedTheme;
+    QToolButton *placeholderButton;
+    QToolButton *fileTreeToggleButton;
+    QToolButton *terminalButton;
+    QToolButton *problemsButton;
+    QToolButton *gitButton;
+    QToolButton *sidebarToggleButton;
+    QToolButton *themeButton;
+    QToolButton *settingsButton;
+    QTabBar *tabBar;
+    QTabBar *bottomPanelTabs;
+    QStackedWidget *bottomPanelStack;
+    QLineEdit   *searchLineEdit;
+    QPushButton *searchPrevBtn;
+    QPushButton *searchNextBtn;
+    QLabel      *searchCountLabel;
+    QWidget     *searchBarWidget;
+    QWidget     *welcomeWidget;
+    QVBoxLayout *recentProjectsLayout;
+    QStackedWidget *editorStack;
+    ProblemPanel *problemPanel;
+    TodoPanel    *todoPanel;
+    GitPanel     *gitPanel;
+    TerminalPanel *terminalPanel;
+    Theme selectedTheme;
 
     QTimer *autoSaveTimer;
     QTimer *lspDebounceTimer;
     QStringList recentProjects;
     int maxRecentProjects = 10;
-    QStringList m_languageServers; // Configured language servers
+    QStringList m_languageServers;
     Updater *updater;
     ConfigValidator *configValidator;
     LspClient *lspClient;
-    int m_previousEditorStackIndex; // Remember which view to restore (welcome or editor)
+    int m_previousEditorStackIndex;
 
     void updateCursorPosition();
     void updateStatusBar();
     void updateTabModified(int index, bool modified);
+    void updateTopTabBar();
+    void updateBottomTabBar();
+    QIcon createSymbolIcon(QChar symbol) const;
+    QPushButton* createTabCloseButton(int tabIndex);
     QString findTerminal();
     QPlainTextEdit* getCurrentEditor();
     CodeEditor* getCurrentCodeEditor();
@@ -181,6 +197,8 @@ private:
     void onProblemsFilterChanged(ProblemPanel::Filter filter);
     void toggleProblemPanel();
     void toggleTerminalPanel();
+    void toggleTodoPanel();
+    void showBottomPanel(QWidget *panel);
     void onUpdateAvailable(const QString &version, const QString &downloadUrl);
     void onUpdateCheckFailed(const QString &error);
     void showWelcomeScreen();

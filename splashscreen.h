@@ -67,10 +67,13 @@ public:
                 border: 1px solid palette(mid);
                 border-radius: 16px;
             }
+            QLabel {
+                color: palette(text);
+            }
         )").arg(color.name()));
     }
 
-    void showWithDelay(int milliseconds = 4000)
+    void showWithDelay(int milliseconds = 2500)
     {
         // Adjust size to content and center on screen
         adjustSize();

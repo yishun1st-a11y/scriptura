@@ -41,6 +41,9 @@
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QDesktopServices>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QAbstractAnimation>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -75,18 +78,44 @@ MainWindow::MainWindow(QWidget *parent)
     fileModel = new QFileSystemModel(this);
     fileModel->setRootPath(QDir::homePath());
     ui->fileTreeView->setModel(fileModel);
-    
-    QToolBar *toolbar = new QToolBar(this);
-    toolbar->setObjectName("fileToolbar");
-    ui->sidebarLayout->insertWidget(0, toolbar);
-    
-    goUpButton = new QToolButton(this);
-    goUpButton->setText("Go Up");
-    goUpButton->setEnabled(false);
-    connect(goUpButton, &QToolButton::clicked, this, &MainWindow::goUpClicked);
-    toolbar->addWidget(goUpButton);
+    ui->fileTreeView->setHeaderHidden(true);
+    ui->fileTreeView->setColumnHidden(1, true);
+    ui->fileTreeView->setColumnHidden(2, true);
+    ui->fileTreeView->setColumnHidden(3, true);
 
-    searchBarWidget = new QWidget(this);
+    editorStack = ui->editorStack;
+    bottomPanelStack = ui->bottomPanelStack;
+    tabBar = ui->tabBar;
+    bottomPanelTabs = ui->bottomPanelTabs;
+
+    welcomeWidget = createWelcomeWidget();
+    editorStack->addWidget(welcomeWidget);
+    editorStack->addWidget(ui->tabWidget);
+    editorStack->addWidget(todoPanel);
+    editorStack->addWidget(terminalPanel);
+
+    bottomPanelStack->addWidget(problemPanel);
+    bottomPanelStack->addWidget(gitPanel);
+    problemPanel->hide();
+    gitPanel->hide();
+
+    // Top toolbar setup
+    sidebarToggleButton = new QToolButton(ui->topToolbar);
+    sidebarToggleButton->setText(tr("\u2261"));
+    sidebarToggleButton->setToolTip(tr("Toggle Sidebar"));
+    sidebarToggleButton->setCheckable(true);
+    sidebarToggleButton->setChecked(true);
+    ui->topToolbarLayout->addWidget(sidebarToggleButton);
+
+    goUpButton = new QToolButton(ui->topToolbar);
+    goUpButton->setText(tr("\u2191"));
+    goUpButton->setToolTip(tr("Go Up"));
+    goUpButton->setEnabled(false);
+    ui->topToolbarLayout->addWidget(goUpButton);
+
+    ui->topToolbarLayout->addSpacing(8);
+
+    searchBarWidget = new QWidget(ui->topToolbar);
     searchBarWidget->setVisible(false);
     QHBoxLayout *searchLayout = new QHBoxLayout(searchBarWidget);
     searchLayout->setContentsMargins(2, 2, 2, 2);
@@ -99,13 +128,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::onSearchNext);
     searchLayout->addWidget(searchLineEdit, 1);
 
-    searchPrevBtn = new QPushButton("▲", searchBarWidget);
+    searchPrevBtn = new QPushButton(tr("\u25B2"), searchBarWidget);
     searchPrevBtn->setFixedSize(24, 24);
     searchPrevBtn->setToolTip(tr("Previous match"));
     connect(searchPrevBtn, &QPushButton::clicked, this, &MainWindow::onSearchPrev);
     searchLayout->addWidget(searchPrevBtn);
 
-    searchNextBtn = new QPushButton("▼", searchBarWidget);
+    searchNextBtn = new QPushButton(tr("\u25BC"), searchBarWidget);
     searchNextBtn->setFixedSize(24, 24);
     searchNextBtn->setToolTip(tr("Next match"));
     connect(searchNextBtn, &QPushButton::clicked, this, &MainWindow::onSearchNext);
@@ -116,81 +145,129 @@ MainWindow::MainWindow(QWidget *parent)
     searchCountLabel->setAlignment(Qt::AlignCenter);
     searchLayout->addWidget(searchCountLabel);
 
-    toolbar->addWidget(searchBarWidget);
+    ui->topToolbarLayout->addWidget(searchBarWidget, 1);
 
-    ui->iconSideBar->setFixedWidth(50);
-     ui->iconSideBar->setStyleSheet("QWidget { background-color: palette(button); border-right: 1px solid palette(shadow); }");
+    // Right-side toolbar buttons
+    themeButton = new QToolButton(ui->topToolbar);
+    themeButton->setText(tr("\u263C"));
+    themeButton->setToolTip(tr("Theme"));
+    ui->topToolbarLayout->addWidget(themeButton);
 
-     placeholderButton = findChild<QToolButton*>("placeholderButton");
-      placeholderButton->setToolTip(tr("Todo Manager"));
-      placeholderButton->setCheckable(true);
-      placeholderButton->setStyleSheet(
-          "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
-          "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
-          "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
-      );
+    settingsButton = new QToolButton(ui->topToolbar);
+    settingsButton->setText(tr("\u2699"));
+    settingsButton->setToolTip(tr("Editor Settings"));
+    ui->topToolbarLayout->addWidget(settingsButton);
 
-     fileTreeToggleButton = findChild<QToolButton*>("fileTreeToggleButton");
-    fileTreeToggleButton->setToolTip(tr("Toggle File Tree"));
-    fileTreeToggleButton->setStyleSheet(
-        "QToolButton { border: none; background: transparent; font-size: 20px; padding: 4px; }"
-        "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
-    );
+    // Sidebar icon buttons (bottom of drawer)
+    fileTreeToggleButton = new QToolButton(ui->sidebarDrawer);
+    fileTreeToggleButton->setText(tr("\u2637"));
+    fileTreeToggleButton->setToolTip(tr("File Tree"));
+    fileTreeToggleButton->setCheckable(true);
+    fileTreeToggleButton->setChecked(true);
+    ui->sidebarDrawerLayout->addWidget(fileTreeToggleButton);
 
-    terminalButton = findChild<QToolButton*>("terminalButton");
-    terminalButton->setToolTip(tr("Toggle Terminal"));
+    QWidget *iconBar = new QWidget(ui->sidebarDrawer);
+    QHBoxLayout *iconBarLayout = new QHBoxLayout(iconBar);
+    iconBarLayout->setContentsMargins(4, 4, 4, 4);
+    iconBarLayout->setSpacing(4);
+
+    placeholderButton = new QToolButton(iconBar);
+    placeholderButton->setText(tr("\u2691"));
+    placeholderButton->setToolTip(tr("Todo"));
+    placeholderButton->setCheckable(true);
+    iconBarLayout->addWidget(placeholderButton);
+
+    terminalButton = new QToolButton(iconBar);
+    terminalButton->setText(tr(">_"));
+    terminalButton->setToolTip(tr("Terminal"));
     terminalButton->setCheckable(true);
-    terminalButton->setStyleSheet(
-        "QToolButton { border: none; background: transparent; font-size: 16px; font-family: monospace; padding: 4px; }"
-        "QToolButton:hover { background: palette(highlight); border-radius: 4px; }"
-        "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
-    );
+    iconBarLayout->addWidget(terminalButton);
 
-    problemsButton = new QToolButton(this);
-    problemsButton->setText("⚠");
-    problemsButton->setToolTip(tr("Toggle Problems"));
+    problemsButton = new QToolButton(iconBar);
+    problemsButton->setText(tr("\u26A0"));
+    problemsButton->setToolTip(tr("Problems"));
     problemsButton->setCheckable(true);
-    problemsButton->setStyleSheet(
-        "QToolButton { border: none; background: transparent; font-size: 18px; padding: 4px; }"
-        "QToolButton:checked { background: palette(highlight); border-radius: 4px; }"
-    );
-    ui->iconSideBar->layout()->addWidget(problemsButton);
+    iconBarLayout->addWidget(problemsButton);
 
-    connect(fileTreeToggleButton, &QToolButton::clicked, this, [this](bool checked) {
-        Q_UNUSED(checked);
-        setSidebarCollapsed(!fileTreeToggleButton->isChecked());
-    });
-    connect(terminalButton, &QToolButton::clicked, this, &MainWindow::toggleTerminalPanel);
-    connect(problemsButton, &QToolButton::clicked, this, &MainWindow::toggleProblemPanel);
-    connect(placeholderButton, &QToolButton::toggled, this, &MainWindow::on_placeholderButton_clicked);
+    gitButton = new QToolButton(iconBar);
+    gitButton->setText(tr("\u2387"));
+    gitButton->setToolTip(tr("Git"));
+    gitButton->setCheckable(true);
+    iconBarLayout->addWidget(gitButton);
 
-     connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
+    ui->sidebarDrawerLayout->addWidget(iconBar);
 
-    ui->tabWidget->clear();
-    ui->tabWidget->setTabsClosable(true);
-    
-    connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::on_tabWidget_tabCloseRequested);
+    // Tab bar styling and connections
+    tabBar->setTabsClosable(false);
+    connect(tabBar, &QTabBar::currentChanged, this, &MainWindow::onTopTabChanged);
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, &MainWindow::updateStatusBar);
 
-    // Add problem panel at the bottom
-    ui->editorLayout->addWidget(problemPanel);
-    problemPanel->hide();
+    // Bottom panel tabs
+    bottomPanelTabs->addTab(tr("Problems"));
+    bottomPanelTabs->addTab(tr("Git"));
+    connect(bottomPanelTabs, &QTabBar::currentChanged, this, &MainWindow::onBottomTabChanged);
 
-    // Add git panel at the bottom
-    ui->editorLayout->addWidget(gitPanel);
+    // Sidebar connections
+    connect(sidebarToggleButton, &QToolButton::toggled, this, &MainWindow::toggleSidebar);
+    connect(goUpButton, &QToolButton::clicked, this, &MainWindow::goUpClicked);
+    connect(fileTreeToggleButton, &QToolButton::toggled, this, [this](bool checked) {
+        Q_UNUSED(checked);
+        if (ui->fileTreeView->isHidden()) {
+            ui->fileTreeView->show();
+        } else {
+            ui->fileTreeView->hide();
+        }
+    });
+
+    // Panel button connections
+    connect(placeholderButton, &QToolButton::toggled, this, &MainWindow::toggleTodoPanel);
+    connect(terminalButton, &QToolButton::toggled, this, &MainWindow::toggleTerminalPanel);
+    connect(problemsButton, &QToolButton::toggled, this, &MainWindow::toggleProblemPanel);
+    connect(gitButton, &QToolButton::toggled, this, [this](bool checked) {
+        if (checked) {
+            ui->bottomPanelContainer->show();
+            bottomPanelTabs->setCurrentIndex(1);
+            bottomPanelStack->setCurrentIndex(1);
+            gitPanel->show();
+            if (placeholderButton->isChecked()) {
+                QSignalBlocker blocker(placeholderButton);
+                placeholderButton->setChecked(false);
+            }
+            if (terminalButton->isChecked()) {
+                QSignalBlocker blocker(terminalButton);
+                terminalButton->setChecked(false);
+                editorStack->setCurrentIndex(m_previousEditorStackIndex);
+            }
+            if (problemPanel->isVisible()) {
+                problemPanel->hide();
+                problemsButton->setChecked(false);
+            }
+        } else {
+            ui->bottomPanelContainer->hide();
+            gitPanel->hide();
+        }
+    });
+
+    // Theme and settings buttons
+    connect(themeButton, &QToolButton::clicked, this, &MainWindow::on_action_theme_triggered);
+    connect(settingsButton, &QToolButton::clicked, this, &MainWindow::on_action_editor_settings_triggered);
+
+    // File tree
+    connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
+
+    // Tab close requests
+    connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::on_tabWidget_tabCloseRequested);
+
+    bottomPanelStack->addWidget(problemPanel);
+    bottomPanelStack->addWidget(gitPanel);
+    problemPanel->hide();
     gitPanel->hide();
 
-    ui->editorLayout->removeWidget(ui->tabWidget);
-    editorStack = new QStackedWidget(this);
-    welcomeWidget = createWelcomeWidget();
     editorStack->addWidget(welcomeWidget);
     editorStack->addWidget(ui->tabWidget);
-    
-    // Add todo and terminal panels to the stack for full replacement
     editorStack->addWidget(todoPanel);
     editorStack->addWidget(terminalPanel);
-    
-    ui->editorLayout->addWidget(editorStack);
+
     showWelcomeScreen();
 
     connect(autoSaveTimer, &QTimer::timeout, this, &MainWindow::autoSave);
@@ -227,6 +304,14 @@ MainWindow::MainWindow(QWidget *parent)
     configValidator->resetInvalidSettings();
 
     setSidebarCollapsed(settings.value("ui/sidebarCollapsed", true).toBool());
+
+    // Restore window geometry and state
+    if (settings.contains("mainWindow/geometry")) {
+        restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
+    }
+    if (settings.contains("mainWindow/state")) {
+        restoreState(settings.value("mainWindow/state").toByteArray());
+    }
 }
 
 MainWindow::~MainWindow()
@@ -244,6 +329,18 @@ CodeEditor* MainWindow::getCurrentCodeEditor()
     return qobject_cast<CodeEditor*>(ui->tabWidget->currentWidget());
 }
 
+QPushButton* MainWindow::createTabCloseButton(int tabIndex)
+{
+    QPushButton *closeBtn = new QPushButton(tr("\u00D7"));
+    closeBtn->setFixedSize(16, 16);
+    closeBtn->setFlat(true);
+    closeBtn->setCursor(Qt::ArrowCursor);
+    connect(closeBtn, &QPushButton::clicked, this, [this, tabIndex]() {
+        on_tabWidget_tabCloseRequested(tabIndex);
+    });
+    return closeBtn;
+}
+
 QWidget* MainWindow::createWelcomeWidget()
 {
     QWidget *widget = new QWidget(this);
@@ -251,33 +348,53 @@ QWidget* MainWindow::createWelcomeWidget()
     QLabel *titleLabel = new QLabel(tr("Welcome to Scriptura"), widget);
     titleLabel->setObjectName("welcomeTitle");
     titleLabel->setAlignment(Qt::AlignCenter);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(32);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
 
     QLabel *descriptionLabel = new QLabel(tr("Open a project or create a new file to start editing."), widget);
     descriptionLabel->setAlignment(Qt::AlignCenter);
+    QFont descFont = descriptionLabel->font();
+    descFont.setPointSize(11);
+    descriptionLabel->setFont(descFont);
+    descriptionLabel->setStyleSheet("color: palette(mid);");
 
     QPushButton *openProjectButton = new QPushButton(tr("Open Project"), widget);
+    openProjectButton->setMinimumWidth(140);
+    openProjectButton->setStyleSheet("QPushButton { padding: 8px 16px; }");
+    
     QPushButton *newFileButton = new QPushButton(tr("New File"), widget);
+    newFileButton->setMinimumWidth(140);
+    newFileButton->setStyleSheet("QPushButton { padding: 8px 16px; }");
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
     buttonLayout->addWidget(openProjectButton);
+    buttonLayout->addSpacing(12);
     buttonLayout->addWidget(newFileButton);
     buttonLayout->addStretch();
 
     QFrame *recentProjectsFrame = new QFrame(widget);
-    recentProjectsFrame->setFrameShape(QFrame::NoFrame);
+    recentProjectsFrame->setFrameShape(QFrame::StyledPanel);
+    recentProjectsFrame->setFrameShadow(QFrame::Sunken);
     recentProjectsLayout = new QVBoxLayout(recentProjectsFrame);
-    recentProjectsLayout->addWidget(new QLabel(tr("<b>Recent Projects:</b>"), recentProjectsFrame));
+    recentProjectsLayout->setSpacing(6);
+    QLabel *recentLabel = new QLabel(tr("<b>Recent Projects:</b>"), recentProjectsFrame);
+    recentProjectsLayout->addWidget(recentLabel);
 
     updateRecentProjectsOnWelcome();
 
     QVBoxLayout *layout = new QVBoxLayout(widget);
+    layout->setSpacing(16);
     layout->addStretch();
     layout->addWidget(titleLabel);
     layout->addWidget(descriptionLabel);
-    layout->addStretch();
+    layout->addSpacing(24);
     layout->addLayout(buttonLayout);
+    layout->addSpacing(32);
     layout->addWidget(recentProjectsFrame);
+    layout->addSpacing(24);
     layout->addWidget(createKeyboardShortcutsWidget());
     layout->addStretch();
 
@@ -313,11 +430,18 @@ QWidget* MainWindow::createKeyboardShortcutsWidget()
 void MainWindow::showWelcomeScreen()
 {
     editorStack->setCurrentWidget(welcomeWidget);
+    tabBar->hide();
+    searchBarWidget->setVisible(false);
 }
 
 void MainWindow::showEditorInterface()
 {
     editorStack->setCurrentWidget(ui->tabWidget);
+    if (ui->tabWidget->count() > 0) {
+        tabBar->show();
+    } else {
+        tabBar->hide();
+    }
 }
 
 void MainWindow::updateCursorPosition()
@@ -525,7 +649,10 @@ void MainWindow::on_action_open_file_triggered()
     openFiles.append({fileName, QFileInfo(fileName).fileName(), false});
     showEditorInterface();
     ui->tabWidget->addTab(editor, QFileInfo(fileName).fileName());
+    tabBar->addTab(QFileInfo(fileName).fileName());
+    tabBar->setTabButton(tabBar->count() - 1, QTabBar::RightSide, createTabCloseButton(tabBar->count() - 1));
     ui->tabWidget->setCurrentWidget(editor);
+    tabBar->setCurrentIndex(tabBar->count() - 1);
     currentFile = fileName;
     setWindowTitle(QFileInfo(fileName).fileName() + " - Scriptura");
     showSearchBar(true);
@@ -702,7 +829,10 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
 
         showEditorInterface();
         ui->tabWidget->addTab(editor, openFile.fileName);
+        tabBar->addTab(openFile.fileName);
+        tabBar->setTabButton(tabBar->count() - 1, QTabBar::RightSide, createTabCloseButton(tabBar->count() - 1));
         ui->tabWidget->setCurrentWidget(editor);
+        tabBar->setCurrentIndex(tabBar->count() - 1);
 
         currentFile = path;
         setWindowTitle(openFile.fileName + " - Scriptura");
@@ -749,6 +879,7 @@ void MainWindow::on_tabWidget_tabCloseRequested(int index)
 
     QWidget *widget = ui->tabWidget->widget(index);
     ui->tabWidget->removeTab(index);
+    tabBar->removeTab(index);
     delete widget;
 
     if (ui->tabWidget->count() > 0) {
@@ -801,31 +932,127 @@ void MainWindow::on_action_new_window_triggered()
 void MainWindow::toggleTerminalPanel()
 {
     if (editorStack->currentWidget() == terminalPanel) {
-        // Terminal is currently shown, restore previous view
         editorStack->setCurrentIndex(m_previousEditorStackIndex);
         terminalButton->setChecked(false);
     } else {
-        // Show terminal, replacing the editor
         m_previousEditorStackIndex = editorStack->currentIndex();
         editorStack->setCurrentWidget(terminalPanel);
         terminalButton->setChecked(true);
-        // Close other panels that occupy the same area (block signals to prevent recursion)
         if (placeholderButton->isChecked()) {
             QSignalBlocker blocker(placeholderButton);
             placeholderButton->setChecked(false);
         }
-        if (problemPanel->isVisible()) {
-            problemPanel->hide();
+        if (ui->bottomPanelContainer->isVisible()) {
+            ui->bottomPanelContainer->hide();
             problemsButton->setChecked(false);
-        }
-        if (gitPanel->isVisible()) {
-            gitPanel->hide();
+            gitButton->setChecked(false);
         }
         if (!terminalPanel->isRunning()) {
             terminalPanel->startShell(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
         } else {
             terminalPanel->setWorkingDirectory(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
         }
+    }
+}
+
+void MainWindow::toggleSidebar()
+{
+    if (sidebarToggleButton->isChecked()) {
+        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
+        animation->setDuration(200);
+        animation->setStartValue(ui->sidebarDrawer->width());
+        animation->setEndValue(240);
+        animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+            ui->sidebarDrawer->setMinimumWidth(48);
+        });
+        animation->start(QAbstractAnimation::DeleteWhenStopped);
+
+        QPropertyAnimation *minAnim = new QPropertyAnimation(ui->sidebarDrawer, "minimumWidth");
+        minAnim->setDuration(200);
+        minAnim->setStartValue(0);
+        minAnim->setEndValue(48);
+        minAnim->setEasingCurve(QEasingCurve::InOutCubic);
+        minAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    } else {
+        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
+        animation->setDuration(200);
+        animation->setStartValue(ui->sidebarDrawer->width());
+        animation->setEndValue(0);
+        animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+            ui->sidebarDrawer->setMinimumWidth(0);
+            ui->sidebarDrawer->setMaximumWidth(0);
+        });
+        animation->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+}
+
+void MainWindow::onTopTabChanged(int index)
+{
+    Q_UNUSED(index);
+    updateTopTabBar();
+}
+
+void MainWindow::onBottomTabChanged(int index)
+{
+    bottomPanelStack->setCurrentIndex(index);
+    if (index == 0) {
+        problemPanel->show();
+        gitPanel->hide();
+        problemsButton->setChecked(true);
+        gitButton->setChecked(false);
+    } else if (index == 1) {
+        problemPanel->hide();
+        gitPanel->show();
+        problemsButton->setChecked(false);
+        gitButton->setChecked(true);
+    }
+}
+
+void MainWindow::toggleTodoPanel()
+{
+    if (placeholderButton->isChecked()) {
+        m_previousEditorStackIndex = editorStack->currentIndex();
+        editorStack->setCurrentWidget(todoPanel);
+        if (terminalButton->isChecked()) {
+            QSignalBlocker blocker(terminalButton);
+            terminalButton->setChecked(false);
+        }
+        if (ui->bottomPanelContainer->isVisible()) {
+            ui->bottomPanelContainer->hide();
+            problemsButton->setChecked(false);
+            gitButton->setChecked(false);
+        }
+    } else {
+        editorStack->setCurrentIndex(m_previousEditorStackIndex);
+    }
+}
+
+void MainWindow::toggleProblemPanel()
+{
+    if (problemsButton->isChecked()) {
+        ui->bottomPanelContainer->show();
+        bottomPanelTabs->setCurrentIndex(0);
+        bottomPanelStack->setCurrentIndex(0);
+        problemPanel->show();
+        if (placeholderButton->isChecked()) {
+            QSignalBlocker blocker(placeholderButton);
+            placeholderButton->setChecked(false);
+        }
+        if (terminalButton->isChecked()) {
+            QSignalBlocker blocker(terminalButton);
+            terminalButton->setChecked(false);
+            editorStack->setCurrentIndex(m_previousEditorStackIndex);
+        }
+        if (gitButton->isChecked()) {
+            QSignalBlocker blocker(gitButton);
+            gitButton->setChecked(false);
+            gitPanel->hide();
+        }
+    } else {
+        ui->bottomPanelContainer->hide();
+        problemPanel->hide();
     }
 }
 
@@ -873,7 +1100,7 @@ void MainWindow::on_action_editor_settings_triggered()
 {
     QDialog *dialog = new QDialog(this);
     dialog->setWindowTitle(tr("Editor Settings"));
-    dialog->resize(400, 300);
+    dialog->resize(450, 400);
 
     QScreen *screen = QApplication::primaryScreen();
     if (screen) {
@@ -887,15 +1114,19 @@ void MainWindow::on_action_editor_settings_triggered()
 
     CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->currentWidget());
 
-    QHBoxLayout *fontLayout = new QHBoxLayout();
-    QLabel *fontLabel = new QLabel(tr("Font:"), dialog);
+    // Font settings
+    QGroupBox *fontGroup = new QGroupBox(tr("Font"), dialog);
+    QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
+    
+    QHBoxLayout *fontNameLayout = new QHBoxLayout();
+    QLabel *fontLabel = new QLabel(tr("Font Family:"), dialog);
     QFontComboBox *fontCombo = new QFontComboBox(dialog);
     fontCombo->setFontFilters(QFontComboBox::ScalableFonts);
     if (editor) fontCombo->setCurrentFont(editor->font());
-    fontLayout->addWidget(fontLabel);
-    fontLayout->addWidget(fontCombo);
-    mainLayout->addLayout(fontLayout);
-
+    fontNameLayout->addWidget(fontLabel);
+    fontNameLayout->addWidget(fontCombo, 1);
+    fontLayout->addLayout(fontNameLayout);
+    
     QHBoxLayout *sizeLayout = new QHBoxLayout();
     QLabel *sizeLabel = new QLabel(tr("Size:"), dialog);
     QSpinBox *sizeSpin = new QSpinBox(dialog);
@@ -904,8 +1135,14 @@ void MainWindow::on_action_editor_settings_triggered()
     sizeLayout->addWidget(sizeLabel);
     sizeLayout->addWidget(sizeSpin);
     sizeLayout->addStretch();
-    mainLayout->addLayout(sizeLayout);
+    fontLayout->addLayout(sizeLayout);
+    
+    mainLayout->addWidget(fontGroup);
 
+    // Editor behavior
+    QGroupBox *behaviorGroup = new QGroupBox(tr("Behavior"), dialog);
+    QVBoxLayout *behaviorLayout = new QVBoxLayout(behaviorGroup);
+    
     QHBoxLayout *tabLayout = new QHBoxLayout();
     QLabel *tabLabel = new QLabel(tr("Tab Width:"), dialog);
     QSpinBox *tabSpin = new QSpinBox(dialog);
@@ -914,18 +1151,38 @@ void MainWindow::on_action_editor_settings_triggered()
     tabLayout->addWidget(tabLabel);
     tabLayout->addWidget(tabSpin);
     tabLayout->addStretch();
-    mainLayout->addLayout(tabLayout);
+    behaviorLayout->addLayout(tabLayout);
+    
+    QCheckBox *wordWrapCheckbox = new QCheckBox(tr("Word Wrap"), dialog);
+    if (editor) wordWrapCheckbox->setChecked(editor->lineWrapMode() != QPlainTextEdit::NoWrap);
+    behaviorLayout->addWidget(wordWrapCheckbox);
+    
+    QCheckBox *indentGuidesCheckbox = new QCheckBox(tr("Show Indent Guides"), dialog);
+    if (editor) indentGuidesCheckbox->setChecked(editor->property("showIndentGuides").toBool());
+    behaviorLayout->addWidget(indentGuidesCheckbox);
+    
+    mainLayout->addWidget(behaviorGroup);
 
-    QHBoxLayout *widgetSizeLayout = new QHBoxLayout();
-    QLabel *widgetSizeLabel = new QLabel(tr("Editor Width:"), dialog);
-    QSpinBox *widgetSizeSpin = new QSpinBox(dialog);
-    widgetSizeSpin->setRange(200, 2000);
-    widgetSizeSpin->setSuffix(" px");
-    if (editor) widgetSizeSpin->setValue(editor->minimumWidth());
-    widgetSizeLayout->addWidget(widgetSizeLabel);
-    widgetSizeLayout->addWidget(widgetSizeSpin);
-    widgetSizeLayout->addStretch();
-    mainLayout->addLayout(widgetSizeLayout);
+    // Display
+    QGroupBox *displayGroup = new QGroupBox(tr("Display"), dialog);
+    QVBoxLayout *displayLayout = new QVBoxLayout(displayGroup);
+    
+    QCheckBox *lineNumbersCheckbox = new QCheckBox(tr("Show Line Numbers"), dialog);
+    if (editor) lineNumbersCheckbox->setChecked(editor->property("showLineNumbers").toBool());
+    displayLayout->addWidget(lineNumbersCheckbox);
+    
+    QHBoxLayout *widthLayout = new QHBoxLayout();
+    QLabel *widthLabel = new QLabel(tr("Editor Width:"), dialog);
+    QSpinBox *widthSpin = new QSpinBox(dialog);
+    widthSpin->setRange(200, 2000);
+    widthSpin->setSuffix(" px");
+    if (editor) widthSpin->setValue(editor->minimumWidth());
+    widthLayout->addWidget(widthLabel);
+    widthLayout->addWidget(widthSpin);
+    widthLayout->addStretch();
+    displayLayout->addLayout(widthLayout);
+    
+    mainLayout->addWidget(displayGroup);
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
     mainLayout->addWidget(buttonBox);
@@ -943,8 +1200,17 @@ void MainWindow::on_action_editor_settings_triggered()
         int tabWidth = tabSpin->value();
         settings.setValue("editor/tabWidth", tabWidth);
 
-        int editorWidth = widgetSizeSpin->value();
+        int editorWidth = widthSpin->value();
         settings.setValue("editor/width", editorWidth);
+        
+        bool wordWrap = wordWrapCheckbox->isChecked();
+        settings.setValue("editor/wordWrap", wordWrap);
+        
+        bool showIndentGuides = indentGuidesCheckbox->isChecked();
+        settings.setValue("editor/showIndentGuides", showIndentGuides);
+        
+        bool showLineNumbers = lineNumbersCheckbox->isChecked();
+        settings.setValue("editor/showLineNumbers", showLineNumbers);
 
         for (int i = 0; i < ui->tabWidget->count(); i++) {
             if (CodeEditor *ed = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i))) {
@@ -952,6 +1218,9 @@ void MainWindow::on_action_editor_settings_triggered()
                 ed->setTabWidth(tabWidth);
                 if (editorWidth > 0)
                     ed->setMinimumWidth(editorWidth);
+                ed->setLineWrapMode(wordWrap ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+                ed->setProperty("showIndentGuides", showIndentGuides);
+                ed->setProperty("showLineNumbers", showLineNumbers);
             }
         }
     }
@@ -970,8 +1239,281 @@ void MainWindow::applyTheme(const Theme &theme)
 
     QApplication::setStyle("Fusion");
     QApplication::setPalette(palette);
-    QString sheet = qApp->styleSheet();
-    qApp->setStyleSheet(sheet);
+
+    QColor windowColor = palette.color(QPalette::Window);
+    QColor baseColor = palette.color(QPalette::Base);
+    QColor buttonColor = palette.color(QPalette::Button);
+    QColor textColor = palette.color(QPalette::WindowText);
+    QColor accentColor = palette.color(QPalette::Highlight);
+    QColor midColor = palette.color(QPalette::Mid);
+    QColor lightColor = palette.color(QPalette::Light);
+
+    QString neumorphicSheet = QString(
+        "QWidget {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  border-radius: 12px;"
+        "}"
+        ""
+        "QMainWindow {"
+        "  background-color: %3;"
+        "}"
+        ""
+        "QToolButton {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 6px 12px;"
+        "  color: %2;"
+        "}"
+        "QToolButton:hover {"
+        "  background-color: %5;"
+        "}"
+        "QToolButton:checked {"
+        "  background-color: %5;"
+        "  border: 1px solid %6;"
+        "}"
+        ""
+        "QPushButton {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 8px 16px;"
+        "  color: %2;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: %5;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: %7;"
+        "  border: 1px solid %7;"
+        "}"
+        ""
+        "QLineEdit, QTextEdit, QPlainTextEdit {"
+        "  background-color: %8;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 6px;"
+        "  color: %2;"
+        "  selection-background-color: %6;"
+        "  selection-color: %2;"
+        "}"
+        ""
+        "QTreeView {"
+        "  background-color: %3;"
+        "  border: none;"
+        "  border-radius: 8px;"
+        "  selection-background-color: %5;"
+        "  selection-color: %2;"
+        "}"
+        "QTreeView::item {"
+        "  padding: 4px;"
+        "  border-radius: 4px;"
+        "}"
+        "QTreeView::item:hover {"
+        "  background-color: %5;"
+        "}"
+        "QTreeView::item:selected {"
+        "  background-color: %5;"
+        "}"
+        ""
+        "QTabBar::tab {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 6px 16px;"
+        "  margin-right: 4px;"
+        "  color: %2;"
+        "}"
+        "QTabBar::tab:selected {"
+        "  background-color: %5;"
+        "  border: 1px solid %6;"
+        "}"
+        "QTabBar::tab:hover:!selected {"
+        "  background-color: %8;"
+        "}"
+        ""
+        "QTabWidget::pane {"
+        "  border: 1px solid %4;"
+        "  border-radius: 0px 0px 8px 8px;"
+        "  top: -1px;"
+        "}"
+        ""
+        "QStatusBar {"
+        "  background-color: %3;"
+        "  border-top: 1px solid %4;"
+        "  color: %2;"
+        "}"
+        ""
+        "QMenuBar {"
+        "  background-color: %3;"
+        "  border-bottom: 1px solid %4;"
+        "  color: %2;"
+        "  border-radius: 0px;"
+        "}"
+        "QMenuBar::item {"
+        "  background-color: transparent;"
+        "  padding: 4px 12px;"
+        "  border-radius: 6px;"
+        "}"
+        "QMenuBar::item:selected {"
+        "  background-color: %5;"
+        "}"
+        ""
+        "QMenu {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "  background-color: transparent;"
+        "  padding: 6px 24px;"
+        "  border-radius: 4px;"
+        "}"
+        "QMenu::item:selected {"
+        "  background-color: %5;"
+        "}"
+        ""
+        "QScrollBar:vertical {"
+        "  background-color: %3;"
+        "  width: 10px;"
+        "  border-radius: 5px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "  background-color: %5;"
+        "  border-radius: 5px;"
+        "  min-height: 20px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "  background-color: %6;"
+        "}"
+        "QScrollBar:horizontal {"
+        "  background-color: %3;"
+        "  height: 10px;"
+        "  border-radius: 5px;"
+        "}"
+        "QScrollBar::handle:horizontal {"
+        "  background-color: %5;"
+        "  border-radius: 5px;"
+        "  min-width: 20px;"
+        "}"
+        "QScrollBar::handle:horizontal:hover {"
+        "  background-color: %6;"
+        "}"
+        ""
+        "QGroupBox {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  margin-top: 16px;"
+        "  padding-top: 8px;"
+        "}"
+        "QGroupBox::title {"
+        "  subcontrol-origin: margin;"
+        "  subcontrol-position: top center;"
+        "  padding: 0 8px;"
+        "  color: %2;"
+        "}"
+        ""
+        "QLabel {"
+        "  background-color: transparent;"
+        "  color: %2;"
+        "  border-radius: 4px;"
+        "}"
+        ""
+        "QDialog {"
+        "  background-color: %3;"
+        "  border-radius: 12px;"
+        "}"
+        ""
+        "QCheckBox, QRadioButton {"
+        "  spacing: 8px;"
+        "  border-radius: 4px;"
+        "}"
+        "QCheckBox::indicator, QRadioButton::indicator {"
+        "  width: 16px;"
+        "  height: 16px;"
+        "  border-radius: 4px;"
+        "  border: 1px solid %4;"
+        "  background-color: %3;"
+        "}"
+        "QRadioButton::indicator {"
+        "  border-radius: 8px;"
+        "}"
+        "QCheckBox::indicator:checked, QRadioButton::indicator:checked {"
+        "  background-color: %6;"
+        "  border: 1px solid %6;"
+        "}"
+        ""
+        "QSpinBox, QFontComboBox {"
+        "  background-color: %8;"
+        "  border: 1px solid %4;"
+        "  border-radius: 6px;"
+        "  padding: 4px;"
+        "  color: %2;"
+        "}"
+        ""
+        "QToolBar {"
+        "  background-color: %3;"
+        "  border: none;"
+        "  spacing: 4px;"
+        "}"
+        ""
+        "QTabBar {"
+        "  background-color: transparent;"
+        "  border: none;"
+        "}"
+        ""
+        "QWidget#bottomPanelContainer {"
+        "  background-color: %3;"
+        "  border-top: 1px solid %4;"
+        "  border-radius: 0px;"
+        "}"
+        ""
+        "QWidget#sidebarDrawer {"
+        "  background-color: %3;"
+        "  border-right: 1px solid %4;"
+        "  border-radius: 0px;"
+        "}"
+        ""
+        "QWidget#editorContainer {"
+        "  background-color: %8;"
+        "}"
+        ""
+        "QWidget#topToolbar {"
+        "  background-color: %3;"
+        "  border-bottom: 1px solid %4;"
+        "  border-radius: 0px;"
+        "}"
+        ""
+        "QFrame#recentProjectsFrame {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 12px;"
+        "}"
+        ""
+        "QPushButton#projectButton {"
+        "  background-color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 8px;"
+        "  padding: 8px;"
+        "  text-align: left;"
+        "}"
+        "QPushButton#projectButton:hover {"
+        "  background-color: %5;"
+        "}"
+    )
+    .arg(windowColor.name())
+    .arg(textColor.name())
+    .arg(buttonColor.name())
+    .arg(midColor.name())
+    .arg(lightColor.name())
+    .arg(accentColor.name())
+    .arg(midColor.darker(110).name())
+    .arg(baseColor.name());
+
+    qApp->setStyleSheet(neumorphicSheet);
 
     for (QWidget *widget : QApplication::allWidgets()) {
         widget->setPalette(palette);
@@ -1055,17 +1597,49 @@ void MainWindow::on_action_theme_triggered()
     hcCheckbox->setChecked(selectedTheme.features.testFlag(ThemeFeature::HighContrast));
     featuresLayout->addWidget(hcCheckbox);
 
+    Theme currentTheme = selectedTheme;
+
+    // Preview area
+    QGroupBox *previewGroup = new QGroupBox(tr("Preview"), dialog);
+    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
+    QLabel *previewLabel = new QLabel(tr("Sample text with <b>bold</b>, <i>italic</i>, and <a href=\"#\">link</a>."), dialog);
+    previewLabel->setWordWrap(true);
+    previewLabel->setTextFormat(Qt::RichText);
+    previewLabel->setOpenExternalLinks(false);
+    previewLayout->addWidget(previewLabel);
+    QPushButton *sampleButton = new QPushButton(tr("Sample Button"), dialog);
+    previewLayout->addWidget(sampleButton);
+
     mainLayout->addWidget(familyGroup);
     mainLayout->addWidget(modeGroup);
     mainLayout->addWidget(featuresGroup);
+    mainLayout->addWidget(previewGroup);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
     QPushButton *applyButton = new QPushButton(tr("Apply"), dialog);
+    applyButton->setDefault(true);
     buttonLayout->addWidget(applyButton);
     mainLayout->addLayout(buttonLayout);
 
-    Theme currentTheme = selectedTheme;
+    // Update preview when theme changes
+    auto updatePreview = [&]() {
+        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        ThemeFeatures features;
+        if (hcCheckbox->isChecked())
+            features |= ThemeFeature::HighContrast;
+        
+        QPalette p = buildBasePalette(currentTheme.family, mode);
+        if (features.testFlag(ThemeFeature::HighContrast))
+            applyHighContrastPalette(p, currentTheme.family, mode);
+        
+        previewLabel->setStyleSheet(QString("color: %1; background-color: %2; padding: 8px; border-radius: 4px;")
+                                   .arg(p.color(QPalette::WindowText).name())
+                                   .arg(p.color(QPalette::Base).name()));
+        sampleButton->setStyleSheet(QString("background-color: %1; color: %2; border: 1px solid %2; padding: 6px 12px; border-radius: 4px;")
+                                   .arg(p.color(QPalette::Button).name())
+                                   .arg(p.color(QPalette::ButtonText).name()));
+    };
 
     auto refreshFamilyPreviews = [&]() {
         ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
@@ -1086,12 +1660,26 @@ void MainWindow::on_action_theme_triggered()
         currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
         currentTheme.mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
         currentTheme.features = hcCheckbox->isChecked() ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures();
+        updatePreview();
     });
 
-    connect(lightRadio, &QRadioButton::toggled, refreshFamilyPreviews);
-    connect(hcCheckbox, &QCheckBox::toggled, refreshFamilyPreviews);
+    connect(lightRadio, &QRadioButton::toggled, [&]() {
+        refreshFamilyPreviews();
+        updatePreview();
+    });
+    connect(hcCheckbox, &QCheckBox::toggled, [&]() {
+        refreshFamilyPreviews();
+        updatePreview();
+    });
+    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
+        currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
+        updatePreview();
+    });
 
     connect(applyButton, &QPushButton::clicked, dialog, &QDialog::accept);
+
+    // Initial preview update
+    updatePreview();
 
     int result = dialog->exec();
     if (result == QDialog::Accepted && currentTheme != selectedTheme) {
@@ -1127,17 +1715,37 @@ void MainWindow::setSidebarCollapsed(bool collapsed)
     settings.setValue("ui/sidebarCollapsed", collapsed);
 
     if (collapsed) {
-        ui->fileTreeGroupBox->hide();
-        if (QToolBar *tb = findChild<QToolBar*>("fileToolbar"))
-            tb->hide();
-        if (fileTreeToggleButton)
-            fileTreeToggleButton->setChecked(false);
+        if (sidebarToggleButton)
+            sidebarToggleButton->setChecked(false);
+        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
+        animation->setDuration(200);
+        animation->setStartValue(ui->sidebarDrawer->width());
+        animation->setEndValue(0);
+        animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+            ui->sidebarDrawer->setMinimumWidth(0);
+            ui->sidebarDrawer->setMaximumWidth(0);
+        });
+        animation->start(QAbstractAnimation::DeleteWhenStopped);
     } else {
-        ui->fileTreeGroupBox->show();
-        if (QToolBar *tb = findChild<QToolBar*>("fileToolbar"))
-            tb->show();
-        if (fileTreeToggleButton)
-            fileTreeToggleButton->setChecked(true);
+        if (sidebarToggleButton)
+            sidebarToggleButton->setChecked(true);
+        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
+        animation->setDuration(200);
+        animation->setStartValue(ui->sidebarDrawer->width());
+        animation->setEndValue(240);
+        animation->setEasingCurve(QEasingCurve::InOutCubic);
+        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+            ui->sidebarDrawer->setMinimumWidth(48);
+        });
+        animation->start(QAbstractAnimation::DeleteWhenStopped);
+
+        QPropertyAnimation *minAnim = new QPropertyAnimation(ui->sidebarDrawer, "minimumWidth");
+        minAnim->setDuration(200);
+        minAnim->setStartValue(0);
+        minAnim->setEndValue(48);
+        minAnim->setEasingCurve(QEasingCurve::InOutCubic);
+        minAnim->start(QAbstractAnimation::DeleteWhenStopped);
     }
 }
 
@@ -1187,17 +1795,19 @@ void MainWindow::performSearch(const QString &text, bool forward)
             break;
 
         QTextEdit::ExtraSelection sel;
-        if (matchIndex == activeIndex) {
-            sel.cursor = cursor;
-            sel.cursor.select(QTextCursor::WordUnderCursor);
-            sel.format.setBackground(QColor(255, 215, 0, 200));
-            sel.format.setForeground(Qt::black);
-            activeCursor = cursor;
-        } else {
-            sel.cursor = cursor;
-            sel.cursor.select(QTextCursor::WordUnderCursor);
-            sel.format.setBackground(QColor(255, 215, 0, 70));
-        }
+    if (matchIndex == activeIndex) {
+        sel.cursor = cursor;
+        sel.cursor.select(QTextCursor::WordUnderCursor);
+        QColor highlightColor = palette().color(QPalette::Highlight);
+        sel.format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
+        sel.format.setForeground(palette().color(QPalette::HighlightedText));
+        activeCursor = cursor;
+    } else {
+        sel.cursor = cursor;
+        sel.cursor.select(QTextCursor::WordUnderCursor);
+        QColor highlightColor = palette().color(QPalette::Highlight);
+        sel.format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
+    }
         selections.append(sel);
         matchIndex++;
     }
@@ -1213,8 +1823,9 @@ void MainWindow::performSearch(const QString &text, bool forward)
         activeIndex = 0;
 
     if (activeIndex < selections.size()) {
-        selections[activeIndex].format.setBackground(QColor(255, 215, 0, 200));
-        selections[activeIndex].format.setForeground(Qt::black);
+        QColor highlightColor = palette().color(QPalette::Highlight);
+        selections[activeIndex].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
+        selections[activeIndex].format.setForeground(palette().color(QPalette::HighlightedText));
         selections[activeIndex].cursor.clearSelection();
     }
 
@@ -1251,14 +1862,15 @@ void MainWindow::onSearchNext()
     current = (current + 1) % selections.size();
 
     QList<QTextEdit::ExtraSelection> newSel = selections;
-    newSel[current].format.setBackground(QColor(255, 215, 0, 200));
-    newSel[current].format.setForeground(Qt::black);
+    QColor highlightColor = palette().color(QPalette::Highlight);
+    newSel[current].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
+    newSel[current].format.setForeground(palette().color(QPalette::HighlightedText));
     newSel[current].cursor.clearSelection();
 
     for (int i = 0; i < newSel.size(); ++i) {
         if (i != current) {
-            newSel[i].format.setBackground(QColor(255, 215, 0, 70));
-            newSel[i].format.setForeground(Qt::NoBrush);
+            QColor highlightColor = palette().color(QPalette::Highlight);
+            newSel[i].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
         }
     }
 
@@ -1286,14 +1898,15 @@ void MainWindow::onSearchPrev()
     current = (current - 1 + selections.size()) % selections.size();
 
     QList<QTextEdit::ExtraSelection> newSel = selections;
-    newSel[current].format.setBackground(QColor(255, 215, 0, 200));
-    newSel[current].format.setForeground(Qt::black);
+    QColor highlightColor = palette().color(QPalette::Highlight);
+    newSel[current].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
+    newSel[current].format.setForeground(palette().color(QPalette::HighlightedText));
     newSel[current].cursor.clearSelection();
 
     for (int i = 0; i < newSel.size(); ++i) {
         if (i != current) {
-            newSel[i].format.setBackground(QColor(255, 215, 0, 70));
-            newSel[i].format.setForeground(Qt::NoBrush);
+            QColor highlightColor = palette().color(QPalette::Highlight);
+            newSel[i].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
         }
     }
 
@@ -1328,9 +1941,10 @@ void MainWindow::updateFamilyButtonPreview(QPushButton *btn, ThemeColorFamily fa
 
     QColor bg = p.color(QPalette::Window);
     QColor accent = highContrastAccentColor(family, mode);
+    QColor textColor = p.color(QPalette::WindowText);
 
-    btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 8px; font-weight: bold; border: 2px solid %2;")
-                       .arg(bg.name()).arg(accent.name()));
+    btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 10px; border: 1px solid %2; border-radius: 4px;")
+                       .arg(bg.name()).arg(textColor.name()));
 }
 
 QPalette MainWindow::buildBasePalette(ThemeColorFamily family, ThemeMode mode)
@@ -1343,149 +1957,212 @@ QPalette MainWindow::buildBasePalette(ThemeColorFamily family, ThemeMode mode)
     switch (family) {
     case ThemeColorFamily::Default:
         if (isDark) {
-            s(QPalette::Window, QColor(53, 53, 53));
+            s(QPalette::Window, QColor(45, 45, 48));
             s(QPalette::WindowText, Qt::white);
-            s(QPalette::Base, QColor(25, 25, 25));
-            s(QPalette::AlternateBase, QColor(53, 53, 53));
+            s(QPalette::Base, QColor(30, 30, 32));
+            s(QPalette::AlternateBase, QColor(55, 55, 60));
             s(QPalette::ToolTipBase, Qt::white);
             s(QPalette::ToolTipText, Qt::white);
             s(QPalette::Text, Qt::white);
-            s(QPalette::Button, QColor(53, 53, 53));
+            s(QPalette::Button, QColor(60, 60, 65));
             s(QPalette::ButtonText, Qt::white);
             s(QPalette::BrightText, Qt::red);
-            s(QPalette::Link, QColor(42, 130, 218));
-            s(QPalette::Highlight, QColor(42, 130, 218));
+            s(QPalette::Link, QColor(100, 150, 255));
+            s(QPalette::Highlight, QColor(100, 150, 255));
             s(QPalette::HighlightedText, Qt::white);
-            s(QPalette::Light, QColor(70, 70, 70));
-            s(QPalette::Mid, QColor(45, 45, 45));
-            s(QPalette::Dark, QColor(35, 35, 35));
-            s(QPalette::Midlight, QColor(60, 60, 60));
+            s(QPalette::Light, QColor(80, 80, 85));
+            s(QPalette::Mid, QColor(50, 50, 55));
+            s(QPalette::Dark, QColor(35, 35, 38));
+            s(QPalette::Midlight, QColor(70, 70, 75));
         } else {
-            p = QApplication::style()->standardPalette();
+            s(QPalette::Window, QColor(245, 245, 247));
+            s(QPalette::WindowText, QColor(30, 30, 32));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(235, 235, 238));
+            s(QPalette::ToolTipBase, Qt::white);
+            s(QPalette::ToolTipText, QColor(30, 30, 32));
+            s(QPalette::Text, QColor(30, 30, 32));
+            s(QPalette::Button, QColor(240, 240, 242));
+            s(QPalette::ButtonText, QColor(30, 30, 32));
+            s(QPalette::BrightText, Qt::red);
+            s(QPalette::Link, QColor(0, 122, 255));
+            s(QPalette::Highlight, QColor(0, 122, 255));
+            s(QPalette::HighlightedText, Qt::white);
+            s(QPalette::Light, QColor(250, 250, 252));
+            s(QPalette::Mid, QColor(200, 200, 205));
+            s(QPalette::Dark, QColor(180, 180, 185));
+            s(QPalette::Midlight, QColor(245, 245, 247));
         }
         return p;
 
     case ThemeColorFamily::Blue:
         if (isDark) {
-            s(QPalette::Window, QColor(25, 35, 50));
-            s(QPalette::Base, QColor(15, 25, 35));
-            s(QPalette::AlternateBase, QColor(35, 45, 55));
-            s(QPalette::Button, QColor(25, 35, 50));
-            s(QPalette::Highlight, QColor(100, 150, 255));
+            s(QPalette::Window, QColor(35, 42, 55));
+            s(QPalette::Base, QColor(25, 30, 42));
+            s(QPalette::AlternateBase, QColor(45, 52, 65));
+            s(QPalette::Button, QColor(50, 58, 72));
+            s(QPalette::Highlight, QColor(80, 140, 255));
         } else {
-            s(QPalette::Window, QColor(240, 248, 255));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(230, 240, 250));
-            s(QPalette::Button, QColor(240, 248, 255));
-            s(QPalette::Highlight, QColor(100, 150, 255));
+            s(QPalette::Window, QColor(235, 243, 255));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(220, 230, 245));
+            s(QPalette::Button, QColor(220, 230, 245));
+            s(QPalette::Highlight, QColor(0, 122, 255));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(25, 30, 42));
+        s(QPalette::Text, isDark ? Qt::white : QColor(25, 30, 42));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(25, 30, 42));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(65, 72, 85) : QColor(240, 245, 255));
+        s(QPalette::Mid, isDark ? QColor(45, 52, 60) : QColor(175, 190, 210));
+        s(QPalette::Dark, isDark ? QColor(30, 35, 45) : QColor(150, 165, 185));
+        s(QPalette::Midlight, isDark ? QColor(55, 62, 75) : QColor(230, 240, 250));
         break;
 
     case ThemeColorFamily::Green:
         if (isDark) {
-            s(QPalette::Window, QColor(25, 45, 30));
-            s(QPalette::Base, QColor(15, 35, 20));
-            s(QPalette::AlternateBase, QColor(35, 55, 40));
-            s(QPalette::Button, QColor(25, 45, 30));
-            s(QPalette::Highlight, QColor(100, 200, 100));
+            s(QPalette::Window, QColor(35, 48, 35));
+            s(QPalette::Base, QColor(25, 38, 25));
+            s(QPalette::AlternateBase, QColor(45, 58, 45));
+            s(QPalette::Button, QColor(50, 65, 50));
+            s(QPalette::Highlight, QColor(80, 200, 120));
         } else {
-            s(QPalette::Window, QColor(240, 255, 240));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(230, 250, 230));
-            s(QPalette::Button, QColor(240, 255, 240));
-            s(QPalette::Highlight, QColor(100, 200, 100));
+            s(QPalette::Window, QColor(235, 248, 235));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(220, 240, 220));
+            s(QPalette::Button, QColor(220, 240, 220));
+            s(QPalette::Highlight, QColor(0, 180, 80));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(25, 40, 25));
+        s(QPalette::Text, isDark ? Qt::white : QColor(25, 40, 25));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(25, 40, 25));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(65, 78, 65) : QColor(240, 250, 240));
+        s(QPalette::Mid, isDark ? QColor(45, 58, 48) : QColor(170, 200, 170));
+        s(QPalette::Dark, isDark ? QColor(30, 42, 30) : QColor(140, 170, 140));
+        s(QPalette::Midlight, isDark ? QColor(55, 68, 55) : QColor(230, 245, 230));
         break;
 
     case ThemeColorFamily::Red:
         if (isDark) {
-            s(QPalette::Window, QColor(45, 25, 25));
-            s(QPalette::Base, QColor(35, 15, 15));
-            s(QPalette::AlternateBase, QColor(55, 35, 35));
-            s(QPalette::Button, QColor(45, 25, 25));
+            s(QPalette::Window, QColor(48, 35, 35));
+            s(QPalette::Base, QColor(38, 25, 25));
+            s(QPalette::AlternateBase, QColor(58, 45, 45));
+            s(QPalette::Button, QColor(65, 50, 50));
             s(QPalette::Highlight, QColor(255, 100, 100));
         } else {
-            s(QPalette::Window, QColor(255, 245, 245));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(255, 235, 235));
-            s(QPalette::Button, QColor(255, 245, 245));
-            s(QPalette::Highlight, QColor(255, 100, 100));
+            s(QPalette::Window, QColor(248, 238, 238));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(245, 225, 225));
+            s(QPalette::Button, QColor(245, 225, 225));
+            s(QPalette::Highlight, QColor(255, 55, 55));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(40, 25, 25));
+        s(QPalette::Text, isDark ? Qt::white : QColor(40, 25, 25));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(40, 25, 25));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(78, 65, 65) : QColor(252, 240, 240));
+        s(QPalette::Mid, isDark ? QColor(58, 45, 45) : QColor(210, 185, 185));
+        s(QPalette::Dark, isDark ? QColor(42, 30, 30) : QColor(190, 160, 160));
+        s(QPalette::Midlight, isDark ? QColor(68, 55, 55) : QColor(248, 235, 235));
         break;
 
     case ThemeColorFamily::Yellow:
         if (isDark) {
-            s(QPalette::Window, QColor(45, 45, 25));
-            s(QPalette::Base, QColor(35, 35, 15));
-            s(QPalette::AlternateBase, QColor(55, 55, 35));
-            s(QPalette::Button, QColor(45, 45, 25));
-            s(QPalette::Highlight, QColor(200, 200, 50));
+            s(QPalette::Window, QColor(48, 45, 32));
+            s(QPalette::Base, QColor(38, 35, 22));
+            s(QPalette::AlternateBase, QColor(58, 55, 42));
+            s(QPalette::Button, QColor(65, 62, 48));
+            s(QPalette::Highlight, QColor(220, 200, 80));
         } else {
-            s(QPalette::Window, QColor(255, 255, 240));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(255, 250, 220));
-            s(QPalette::Button, QColor(255, 255, 240));
-            s(QPalette::Highlight, QColor(200, 200, 50));
+            s(QPalette::Window, QColor(248, 248, 235));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(245, 242, 215));
+            s(QPalette::Button, QColor(245, 242, 215));
+            s(QPalette::Highlight, QColor(210, 180, 0));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(42, 40, 22));
+        s(QPalette::Text, isDark ? Qt::white : QColor(42, 40, 22));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(42, 40, 22));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(78, 75, 62) : QColor(252, 250, 240));
+        s(QPalette::Mid, isDark ? QColor(58, 55, 42) : QColor(210, 200, 150));
+        s(QPalette::Dark, isDark ? QColor(42, 40, 25) : QColor(190, 180, 130));
+        s(QPalette::Midlight, isDark ? QColor(68, 65, 52) : QColor(248, 245, 225));
         break;
 
     case ThemeColorFamily::Brown:
         if (isDark) {
-            s(QPalette::Window, QColor(40, 30, 20));
-            s(QPalette::Base, QColor(30, 20, 10));
-            s(QPalette::AlternateBase, QColor(50, 40, 30));
-            s(QPalette::Button, QColor(40, 30, 20));
-            s(QPalette::Highlight, QColor(180, 130, 80));
+            s(QPalette::Window, QColor(42, 35, 28));
+            s(QPalette::Base, QColor(32, 25, 18));
+            s(QPalette::AlternateBase, QColor(52, 45, 38));
+            s(QPalette::Button, QColor(58, 50, 42));
+            s(QPalette::Highlight, QColor(190, 140, 90));
         } else {
-            s(QPalette::Window, QColor(255, 250, 240));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(250, 240, 220));
-            s(QPalette::Button, QColor(255, 250, 240));
-            s(QPalette::Highlight, QColor(180, 130, 80));
+            s(QPalette::Window, QColor(248, 245, 238));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(240, 232, 218));
+            s(QPalette::Button, QColor(240, 232, 218));
+            s(QPalette::Highlight, QColor(180, 130, 70));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(35, 28, 20));
+        s(QPalette::Text, isDark ? Qt::white : QColor(35, 28, 20));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(35, 28, 20));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(72, 65, 58) : QColor(250, 247, 240));
+        s(QPalette::Mid, isDark ? QColor(52, 45, 38) : QColor(200, 185, 160));
+        s(QPalette::Dark, isDark ? QColor(35, 30, 25) : QColor(180, 165, 140));
+        s(QPalette::Midlight, isDark ? QColor(62, 55, 48) : QColor(245, 240, 228));
         break;
 
     case ThemeColorFamily::Cyan:
         if (isDark) {
-            s(QPalette::Window, QColor(25, 45, 45));
-            s(QPalette::Base, QColor(15, 35, 35));
-            s(QPalette::AlternateBase, QColor(35, 55, 55));
-            s(QPalette::Button, QColor(25, 45, 45));
-            s(QPalette::Highlight, QColor(50, 180, 200));
+            s(QPalette::Window, QColor(35, 48, 50));
+            s(QPalette::Base, QColor(25, 38, 40));
+            s(QPalette::AlternateBase, QColor(45, 58, 60));
+            s(QPalette::Button, QColor(50, 65, 68));
+            s(QPalette::Highlight, QColor(60, 190, 210));
         } else {
-            s(QPalette::Window, QColor(240, 255, 255));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(220, 250, 250));
-            s(QPalette::Button, QColor(240, 255, 255));
-            s(QPalette::Highlight, QColor(50, 180, 200));
+            s(QPalette::Window, QColor(235, 248, 250));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(215, 238, 242));
+            s(QPalette::Button, QColor(215, 238, 242));
+            s(QPalette::Highlight, QColor(0, 180, 200));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(25, 40, 42));
+        s(QPalette::Text, isDark ? Qt::white : QColor(25, 40, 42));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(25, 40, 42));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(65, 78, 82) : QColor(238, 248, 250));
+        s(QPalette::Mid, isDark ? QColor(45, 58, 62) : QColor(165, 200, 210));
+        s(QPalette::Dark, isDark ? QColor(30, 42, 45) : QColor(140, 180, 190));
+        s(QPalette::Midlight, isDark ? QColor(55, 68, 72) : QColor(228, 242, 245));
         break;
 
     case ThemeColorFamily::Violet:
         if (isDark) {
-            s(QPalette::Window, QColor(35, 25, 50));
-            s(QPalette::Base, QColor(25, 15, 40));
-            s(QPalette::AlternateBase, QColor(45, 35, 60));
-            s(QPalette::Button, QColor(35, 25, 50));
-            s(QPalette::Highlight, QColor(150, 100, 220));
+            s(QPalette::Window, QColor(40, 35, 55));
+            s(QPalette::Base, QColor(30, 25, 42));
+            s(QPalette::AlternateBase, QColor(50, 45, 65));
+            s(QPalette::Button, QColor(55, 48, 70));
+            s(QPalette::Highlight, QColor(140, 100, 220));
         } else {
-            s(QPalette::Window, QColor(245, 240, 255));
-            s(QPalette::Base, Qt::white);
-            s(QPalette::AlternateBase, QColor(235, 225, 245));
-            s(QPalette::Button, QColor(245, 240, 255));
-            s(QPalette::Highlight, QColor(150, 100, 220));
+            s(QPalette::Window, QColor(240, 238, 252));
+            s(QPalette::Base, QColor(255, 255, 255));
+            s(QPalette::AlternateBase, QColor(228, 222, 242));
+            s(QPalette::Button, QColor(228, 222, 242));
+            s(QPalette::Highlight, QColor(140, 80, 230));
         }
+        s(QPalette::WindowText, isDark ? Qt::white : QColor(32, 28, 45));
+        s(QPalette::Text, isDark ? Qt::white : QColor(32, 28, 45));
+        s(QPalette::ButtonText, isDark ? Qt::white : QColor(32, 28, 45));
+        s(QPalette::HighlightedText, Qt::white);
+        s(QPalette::Light, isDark ? QColor(72, 65, 85) : QColor(245, 242, 252));
+        s(QPalette::Mid, isDark ? QColor(52, 45, 62) : QColor(190, 178, 215));
+        s(QPalette::Dark, isDark ? QColor(35, 30, 48) : QColor(165, 150, 195));
+        s(QPalette::Midlight, isDark ? QColor(62, 55, 75) : QColor(238, 232, 248));
         break;
     }
-
-    QColor text = isDark ? Qt::white : Qt::black;
-    QColor btnText = isDark ? Qt::white : Qt::black;
-    QColor hlText = isDark ? Qt::white : Qt::black;
-
-    s(QPalette::WindowText, text);
-    s(QPalette::Text, text);
-    s(QPalette::ButtonText, btnText);
-    s(QPalette::HighlightedText, hlText);
 
     return p;
 }
@@ -1625,7 +2302,25 @@ void MainWindow::updateStatusBar()
     if (editor) {
         int line = editor->textCursor().blockNumber() + 1;
         int column = editor->textCursor().positionInBlock() + 1;
-        ui->statusbar->showMessage(QString("Line %1, Column %2").arg(line).arg(column));
+        QString fileInfo = currentFile.isEmpty() ? tr("No file") : QFileInfo(currentFile).fileName();
+        QString lang = tr("Plain Text");
+        if (!currentFile.isEmpty()) {
+            QString ext = QFileInfo(currentFile).suffix().toLower();
+            if (ext == "cpp" || ext == "c" || ext == "h" || ext == "hpp") lang = "C++";
+            else if (ext == "py") lang = "Python";
+            else if (ext == "js") lang = "JavaScript";
+            else if (ext == "ts") lang = "TypeScript";
+            else if (ext == "java") lang = "Java";
+            else if (ext == "rs") lang = "Rust";
+            else if (ext == "go") lang = "Go";
+            else if (ext == "html" || ext == "htm") lang = "HTML";
+            else if (ext == "css") lang = "CSS";
+            else if (ext == "md") lang = "Markdown";
+            else if (ext == "json") lang = "JSON";
+        }
+        QString lspStatus = lspClient->isRunning() ? tr("LSP: Connected") : tr("LSP: Disconnected");
+        ui->statusbar->showMessage(QString("%1 | %2 | %3 | Line %4, Column %5")
+            .arg(fileInfo, lang, lspStatus).arg(line).arg(column));
     }
 }
 
@@ -1638,6 +2333,16 @@ void MainWindow::updateTabModified(int index, bool modified)
     if (modified)
         title = "*" + title;
     ui->tabWidget->setTabText(index, title);
+}
+
+void MainWindow::updateTopTabBar()
+{
+    tabBar->setCurrentIndex(ui->tabWidget->currentIndex());
+}
+
+void MainWindow::updateBottomTabBar()
+{
+    bottomPanelTabs->setCurrentIndex(bottomPanelStack->currentIndex());
 }
 
 void MainWindow::loadRecentProjects()
@@ -1666,6 +2371,8 @@ void MainWindow::updateRecentProjectsOnWelcome()
         QPushButton *btn = new QPushButton(QFileInfo(project).fileName(), this);
         btn->setToolTip(project);
         btn->setProperty("projectPath", project);
+        btn->setStyleSheet("QPushButton { text-align: left; padding: 6px 12px; }"
+                          "QPushButton:hover { background-color: palette(highlight); color: palette(highlighted-text); }");
         connect(btn, &QPushButton::clicked, this, [this, project]() {
             QDir dir(project);
             if (dir.exists()) {
@@ -1747,6 +2454,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if (checkUnsavedChanges()) {
         autoSaveTimer->stop();
+        
+        // Save window geometry and state
+        QSettings settings;
+        settings.setValue("mainWindow/geometry", saveGeometry());
+        settings.setValue("mainWindow/state", saveState());
+        
         event->accept();
     } else {
         event->ignore();
@@ -2034,35 +2747,6 @@ void MainWindow::onProblemsFilterChanged(ProblemPanel::Filter filter)
 {
     Q_UNUSED(filter)
     // Could update status bar or other UI elements based on filter
-}
-
-void MainWindow::toggleProblemPanel()
-{
-    if (problemPanel->isVisible()) {
-        problemPanel->hide();
-        problemsButton->setChecked(false);
-    } else {
-        problemPanel->show();
-        problemsButton->setChecked(true);
-        // Close other panels that occupy the same area (block signals to prevent recursion)
-        if (terminalButton->isChecked()) {
-            QSignalBlocker blocker(terminalButton);
-            terminalButton->setChecked(false);
-            editorStack->setCurrentIndex(m_previousEditorStackIndex);
-        }
-        if (placeholderButton->isChecked()) {
-            QSignalBlocker blocker(placeholderButton);
-            placeholderButton->setChecked(false);
-        }
-        if (gitPanel->isVisible()) {
-            gitPanel->hide();
-        }
-        // Update with current file's problems
-        if (!currentFile.isEmpty()) {
-            QString uri = QUrl::fromLocalFile(currentFile).toString();
-            problemPanel->setCurrentFile(uri);
-        }
-    }
 }
 
 void MainWindow::on_action_git_commit_triggered()
