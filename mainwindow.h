@@ -133,8 +133,16 @@ private slots:
     void toggleSidebar();
     void onBottomTabChanged(int index);
     void onTopTabChanged(int index);
+    void onSettingsTabCloseRequested(int tabIndex);
 
 private:
+    enum class TabType {
+        File = 0,
+        ThemeSettings = 1,
+        EditorSettings = 2,
+        KeyboardShortcuts = 3
+    };
+
     Ui::MainWindow *ui;
     QString currentFile;
     QString projectDir;
@@ -167,6 +175,11 @@ private:
     TerminalPanel *terminalPanel;
     Theme selectedTheme;
 
+    // Settings page widgets
+    QWidget *themeSettingsWidget;
+    QWidget *editorSettingsWidget;
+    QWidget *keyboardShortcutsPageWidget;
+
     QTimer *autoSaveTimer;
     QTimer *lspDebounceTimer;
     QStringList recentProjects;
@@ -182,13 +195,18 @@ private:
     void updateTabModified(int index, bool modified);
     void updateTopTabBar();
     void updateBottomTabBar();
+    void updateTabBarVisibility();
     QIcon createSymbolIcon(QChar symbol) const;
     QPushButton* createTabCloseButton(int tabIndex);
+    QPushButton* createSettingsTabCloseButton(int tabIndex);
     QString findTerminal();
     QPlainTextEdit* getCurrentEditor();
     CodeEditor* getCurrentCodeEditor();
     QWidget* createWelcomeWidget();
     QWidget* createKeyboardShortcutsWidget();
+    QWidget* createThemeSettingsWidget();
+    QWidget* createEditorSettingsWidget();
+    QWidget* createKeyboardShortcutsPageWidget();
     void startLanguageServer(const QString &filePath);
     void startLanguageServerForProject(const QString &projectPath);
     void stopLanguageServer();

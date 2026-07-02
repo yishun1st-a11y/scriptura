@@ -94,6 +94,28 @@ MainWindow::MainWindow(QWidget *parent)
     editorStack->addWidget(todoPanel);
     editorStack->addWidget(terminalPanel);
 
+    // Create settings page widgets
+    themeSettingsWidget = createThemeSettingsWidget();
+    editorSettingsWidget = createEditorSettingsWidget();
+    keyboardShortcutsPageWidget = createKeyboardShortcutsPageWidget();
+
+    editorStack->addWidget(themeSettingsWidget);
+    editorStack->addWidget(editorSettingsWidget);
+    editorStack->addWidget(keyboardShortcutsPageWidget);
+
+    // Add settings tabs to tabBar
+    int themeSettingsTabIndex = tabBar->addTab(tr("Theme"));
+    tabBar->setTabData(themeSettingsTabIndex, static_cast<int>(TabType::ThemeSettings));
+    tabBar->setTabButton(themeSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(themeSettingsTabIndex));
+
+    int editorSettingsTabIndex = tabBar->addTab(tr("Settings"));
+    tabBar->setTabData(editorSettingsTabIndex, static_cast<int>(TabType::EditorSettings));
+    tabBar->setTabButton(editorSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(editorSettingsTabIndex));
+
+    int keyboardShortcutsTabIndex = tabBar->addTab(tr("Keys"));
+    tabBar->setTabData(keyboardShortcutsTabIndex, static_cast<int>(TabType::KeyboardShortcuts));
+    tabBar->setTabButton(keyboardShortcutsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(keyboardShortcutsTabIndex));
+
     bottomPanelStack->addWidget(problemPanel);
     bottomPanelStack->addWidget(gitPanel);
     problemPanel->hide();
@@ -427,6 +449,332 @@ QWidget* MainWindow::createKeyboardShortcutsWidget()
     return widget;
 }
 
+QWidget* MainWindow::createThemeSettingsWidget()
+{
+    QWidget *widget = new QWidget(this);
+    QVBoxLayout *mainLayout = new QVBoxLayout(widget);
+    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+
+    struct FamilyEntry {
+        ThemeColorFamily family;
+        QString name;
+        QColor lightBg, darkBg;
+        QColor lightText, darkText;
+    };
+
+    FamilyEntry families[] = {
+        {ThemeColorFamily::Default, "Default", QColor(240,240,240), QColor(45,45,45), Qt::black, Qt::white},
+        {ThemeColorFamily::Blue, "Blue", QColor(240,248,255), QColor(25,35,50), Qt::black, Qt::white},
+        {ThemeColorFamily::Green, "Green", QColor(240,255,240), QColor(25,45,30), Qt::black, Qt::white},
+        {ThemeColorFamily::Red, "Red", QColor(255,245,245), QColor(45,25,25), Qt::black, Qt::white},
+        {ThemeColorFamily::Yellow, "Yellow", QColor(255,255,240), QColor(45,45,25), Qt::black, Qt::white},
+        {ThemeColorFamily::Brown, "Brown", QColor(255,250,240), QColor(40,30,20), Qt::black, Qt::white},
+        {ThemeColorFamily::Cyan, "Cyan", QColor(240,255,255), QColor(25,45,45), Qt::black, Qt::white},
+        {ThemeColorFamily::Violet, "Violet", QColor(245,240,255), QColor(35,25,50), Qt::black, Qt::white}
+    };
+
+    QGroupBox *familyGroup = new QGroupBox(tr("Color Family"), widget);
+    QGridLayout *familyGrid = new QGridLayout(familyGroup);
+    QButtonGroup *familyBtnGroup = new QButtonGroup(familyGroup);
+
+    int familySelected = static_cast<int>(selectedTheme.family);
+    for (int i = 0; i < 8; ++i) {
+        QPushButton *btn = new QPushButton(families[i].name, familyGroup);
+        btn->setCheckable(true);
+        btn->setProperty("familyIdx", i);
+        updateFamilyButtonPreview(btn, families[i].family, selectedTheme.mode, selectedTheme.features);
+        familyGrid->addWidget(btn, i / 4, i % 4);
+        familyBtnGroup->addButton(btn);
+        if (i == familySelected)
+            btn->setChecked(true);
+    }
+
+    QGroupBox *modeGroup = new QGroupBox(tr("Mode"), widget);
+    QHBoxLayout *modeLayout = new QHBoxLayout(modeGroup);
+    QRadioButton *lightRadio = new QRadioButton(tr("Light"), modeGroup);
+    QRadioButton *darkRadio = new QRadioButton(tr("Dark"), modeGroup);
+    QButtonGroup *modeBtnGroup = new QButtonGroup(modeGroup);
+    modeBtnGroup->addButton(lightRadio);
+    modeBtnGroup->addButton(darkRadio);
+    modeLayout->addWidget(lightRadio);
+    modeLayout->addWidget(darkRadio);
+    if (selectedTheme.mode == ThemeMode::Light)
+        lightRadio->setChecked(true);
+    else
+        darkRadio->setChecked(true);
+
+    QGroupBox *featuresGroup = new QGroupBox(tr("Features"), widget);
+    QVBoxLayout *featuresLayout = new QVBoxLayout(featuresGroup);
+    QCheckBox *hcCheckbox = new QCheckBox(tr("High Contrast"), featuresGroup);
+    hcCheckbox->setChecked(selectedTheme.features.testFlag(ThemeFeature::HighContrast));
+    featuresLayout->addWidget(hcCheckbox);
+
+    // Preview area
+    QGroupBox *previewGroup = new QGroupBox(tr("Preview"), widget);
+    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
+    QLabel *previewLabel = new QLabel(tr("Sample text with <b>bold</b>, <i>italic</i>, and <a href=\"#\">link</a>."), widget);
+    previewLabel->setWordWrap(true);
+    previewLabel->setTextFormat(Qt::RichText);
+    previewLabel->setOpenExternalLinks(false);
+    previewLayout->addWidget(previewLabel);
+    QPushButton *sampleButton = new QPushButton(tr("Sample Button"), widget);
+    previewLayout->addWidget(sampleButton);
+
+    mainLayout->addWidget(familyGroup);
+    mainLayout->addWidget(modeGroup);
+    mainLayout->addWidget(featuresGroup);
+    mainLayout->addWidget(previewGroup);
+    mainLayout->addStretch();
+
+    // Apply theme immediately when settings change
+    auto applyCurrentSettings = [&]() {
+        ThemeColorFamily family = static_cast<ThemeColorFamily>(familyBtnGroup->checkedId());
+        if (familyBtnGroup->checkedId() == -1)
+            family = selectedTheme.family;
+        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        ThemeFeatures features;
+        if (hcCheckbox->isChecked())
+            features |= ThemeFeature::HighContrast;
+        
+        Theme newTheme(family, mode, features);
+        if (newTheme != selectedTheme) {
+            selectedTheme = newTheme;
+            applyTheme(selectedTheme);
+        }
+    };
+
+    auto updatePreview = [&]() {
+        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        ThemeFeatures features;
+        if (hcCheckbox->isChecked())
+            features |= ThemeFeature::HighContrast;
+        
+        ThemeColorFamily family = static_cast<ThemeColorFamily>(familyBtnGroup->checkedId());
+        if (familyBtnGroup->checkedId() == -1)
+            family = selectedTheme.family;
+        
+        QPalette p = buildBasePalette(family, mode);
+        if (features.testFlag(ThemeFeature::HighContrast))
+            applyHighContrastPalette(p, family, mode);
+        
+        previewLabel->setStyleSheet(QString("color: %1; background-color: %2; padding: 8px; border-radius: 4px;")
+                                   .arg(p.color(QPalette::WindowText).name())
+                                   .arg(p.color(QPalette::Base).name()));
+        sampleButton->setStyleSheet(QString("background-color: %1; color: %2; border: 1px solid %2; padding: 6px 12px; border-radius: 4px;")
+                                   .arg(p.color(QPalette::Button).name())
+                                   .arg(p.color(QPalette::ButtonText).name()));
+    };
+
+    auto refreshFamilyPreviews = [&]() {
+        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
+        ThemeFeatures features;
+        if (hcCheckbox->isChecked())
+            features |= ThemeFeature::HighContrast;
+        for (int i = 0; i < 8; ++i) {
+            QAbstractButton *abtn = familyBtnGroup->button(i);
+            QPushButton *btn = qobject_cast<QPushButton*>(abtn);
+            if (btn)
+                updateFamilyButtonPreview(btn, families[i].family, mode, features);
+        }
+    };
+
+    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
+        Q_UNUSED(button);
+        applyCurrentSettings();
+        updatePreview();
+    });
+
+    connect(lightRadio, &QRadioButton::toggled, [&]() {
+        refreshFamilyPreviews();
+        updatePreview();
+        applyCurrentSettings();
+    });
+    connect(hcCheckbox, &QCheckBox::toggled, [&]() {
+        refreshFamilyPreviews();
+        updatePreview();
+        applyCurrentSettings();
+    });
+
+    // Initial preview update
+    updatePreview();
+
+    return widget;
+}
+
+QWidget* MainWindow::createEditorSettingsWidget()
+{
+    QWidget *widget = new QWidget(this);
+    QVBoxLayout *mainLayout = new QVBoxLayout(widget);
+    mainLayout->setSpacing(12);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+
+    CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->currentWidget());
+
+    // Font settings
+    QGroupBox *fontGroup = new QGroupBox(tr("Font"), widget);
+    QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
+    
+    QHBoxLayout *fontNameLayout = new QHBoxLayout();
+    QLabel *fontLabel = new QLabel(tr("Font Family:"), widget);
+    QFontComboBox *fontCombo = new QFontComboBox(widget);
+    fontCombo->setFontFilters(QFontComboBox::ScalableFonts);
+    if (editor) fontCombo->setCurrentFont(editor->font());
+    fontNameLayout->addWidget(fontLabel);
+    fontNameLayout->addWidget(fontCombo, 1);
+    fontLayout->addLayout(fontNameLayout);
+    
+    QHBoxLayout *sizeLayout = new QHBoxLayout();
+    QLabel *sizeLabel = new QLabel(tr("Size:"), widget);
+    QSpinBox *sizeSpin = new QSpinBox(widget);
+    sizeSpin->setRange(8, 72);
+    if (editor) sizeSpin->setValue(editor->font().pointSize());
+    sizeLayout->addWidget(sizeLabel);
+    sizeLayout->addWidget(sizeSpin);
+    sizeLayout->addStretch();
+    fontLayout->addLayout(sizeLayout);
+    
+    mainLayout->addWidget(fontGroup);
+
+    // Editor behavior
+    QGroupBox *behaviorGroup = new QGroupBox(tr("Behavior"), widget);
+    QVBoxLayout *behaviorLayout = new QVBoxLayout(behaviorGroup);
+    
+    QHBoxLayout *tabLayout = new QHBoxLayout();
+    QLabel *tabLabel = new QLabel(tr("Tab Width:"), widget);
+    QSpinBox *tabSpin = new QSpinBox(widget);
+    tabSpin->setRange(1, 16);
+    if (editor) tabSpin->setValue(editor->tabWidth());
+    tabLayout->addWidget(tabLabel);
+    tabLayout->addWidget(tabSpin);
+    tabLayout->addStretch();
+    behaviorLayout->addLayout(tabLayout);
+    
+    QCheckBox *wordWrapCheckbox = new QCheckBox(tr("Word Wrap"), widget);
+    if (editor) wordWrapCheckbox->setChecked(editor->lineWrapMode() != QPlainTextEdit::NoWrap);
+    behaviorLayout->addWidget(wordWrapCheckbox);
+    
+    QCheckBox *indentGuidesCheckbox = new QCheckBox(tr("Show Indent Guides"), widget);
+    if (editor) indentGuidesCheckbox->setChecked(editor->property("showIndentGuides").toBool());
+    behaviorLayout->addWidget(indentGuidesCheckbox);
+    
+    mainLayout->addWidget(behaviorGroup);
+
+    // Display
+    QGroupBox *displayGroup = new QGroupBox(tr("Display"), widget);
+    QVBoxLayout *displayLayout = new QVBoxLayout(displayGroup);
+    
+    QCheckBox *lineNumbersCheckbox = new QCheckBox(tr("Show Line Numbers"), widget);
+    if (editor) lineNumbersCheckbox->setChecked(editor->property("showLineNumbers").toBool());
+    displayLayout->addWidget(lineNumbersCheckbox);
+    
+    QHBoxLayout *widthLayout = new QHBoxLayout();
+    QLabel *widthLabel = new QLabel(tr("Editor Width:"), widget);
+    QSpinBox *widthSpin = new QSpinBox(widget);
+    widthSpin->setRange(200, 2000);
+    widthSpin->setSuffix(" px");
+    if (editor) widthSpin->setValue(editor->minimumWidth());
+    widthLayout->addWidget(widthLabel);
+    widthLayout->addWidget(widthSpin);
+    widthLayout->addStretch();
+    displayLayout->addLayout(widthLayout);
+    
+    mainLayout->addWidget(displayGroup);
+    mainLayout->addStretch();
+
+    // Apply settings immediately when changed
+    auto applySettings = [&]() {
+        QSettings settings;
+
+        QFont font = fontCombo->currentFont();
+        font.setPointSize(sizeSpin->value());
+        settings.setValue("editor/font", font);
+
+        int tabWidth = tabSpin->value();
+        settings.setValue("editor/tabWidth", tabWidth);
+
+        int editorWidth = widthSpin->value();
+        settings.setValue("editor/width", editorWidth);
+        
+        bool wordWrap = wordWrapCheckbox->isChecked();
+        settings.setValue("editor/wordWrap", wordWrap);
+        
+        bool showIndentGuides = indentGuidesCheckbox->isChecked();
+        settings.setValue("editor/showIndentGuides", showIndentGuides);
+        
+        bool showLineNumbers = lineNumbersCheckbox->isChecked();
+        settings.setValue("editor/showLineNumbers", showLineNumbers);
+
+        for (int i = 0; i < ui->tabWidget->count(); i++) {
+            if (CodeEditor *ed = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i))) {
+                ed->setFont(font);
+                ed->setTabWidth(tabWidth);
+                if (editorWidth > 0)
+                    ed->setMinimumWidth(editorWidth);
+                ed->setLineWrapMode(wordWrap ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+                ed->setProperty("showIndentGuides", showIndentGuides);
+                ed->setProperty("showLineNumbers", showLineNumbers);
+            }
+        }
+    };
+
+    connect(fontCombo, &QFontComboBox::currentFontChanged, widget, [applySettings](const QFont &) { applySettings(); });
+    connect(sizeSpin, &QSpinBox::valueChanged, widget, [applySettings](int) { applySettings(); });
+    connect(tabSpin, &QSpinBox::valueChanged, widget, [applySettings](int) { applySettings(); });
+    connect(wordWrapCheckbox, &QCheckBox::toggled, widget, [applySettings](bool) { applySettings(); });
+    connect(indentGuidesCheckbox, &QCheckBox::toggled, widget, [applySettings](bool) { applySettings(); });
+    connect(lineNumbersCheckbox, &QCheckBox::toggled, widget, [applySettings](bool) { applySettings(); });
+    connect(widthSpin, &QSpinBox::valueChanged, widget, [applySettings](int) { applySettings(); });
+
+    return widget;
+}
+
+QWidget* MainWindow::createKeyboardShortcutsPageWidget()
+{
+    QWidget *widget = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(widget);
+    layout->setSpacing(16);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QLabel *titleLabel = new QLabel(tr("<b>Keyboard Shortcuts</b>"), widget);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(16);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    layout->addWidget(titleLabel);
+
+    QLabel *shortcutsLabel = new QLabel(tr(
+        "<b>File Operations:</b><br>"
+        "Ctrl+N: New File &nbsp;&nbsp; "
+        "Ctrl+S: Save &nbsp;&nbsp; "
+        "Ctrl+Shift+S: Save As &nbsp;&nbsp; "
+        "Ctrl+O: Open File<br><br>"
+        "<b>Edit Operations:</b><br>"
+        "Ctrl+Z: Undo &nbsp;&nbsp; "
+        "Ctrl+Y: Redo &nbsp;&nbsp; "
+        "Ctrl+X: Cut &nbsp;&nbsp; "
+        "Ctrl+C: Copy &nbsp;&nbsp; "
+        "Ctrl+V: Paste<br><br>"
+        "<b>View/Navigation:</b><br>"
+        "Ctrl+F: Find &nbsp;&nbsp; "
+        "F3: Find Next &nbsp;&nbsp; "
+        "Shift+F3: Find Previous &nbsp;&nbsp; "
+        "Ctrl+K: Keyboard Shortcuts<br><br>"
+        "<b>Project:</b><br>"
+        "Ctrl+E: Project Settings &nbsp;&nbsp; "
+        "Ctrl+T: Theme Selection"
+    ), widget);
+    shortcutsLabel->setTextFormat(Qt::RichText);
+    shortcutsLabel->setAlignment(Qt::AlignLeft);
+    shortcutsLabel->setWordWrap(true);
+    layout->addWidget(shortcutsLabel);
+
+    layout->addStretch();
+
+    return widget;
+}
+
 void MainWindow::showWelcomeScreen()
 {
     editorStack->setCurrentWidget(welcomeWidget);
@@ -437,11 +785,7 @@ void MainWindow::showWelcomeScreen()
 void MainWindow::showEditorInterface()
 {
     editorStack->setCurrentWidget(ui->tabWidget);
-    if (ui->tabWidget->count() > 0) {
-        tabBar->show();
-    } else {
-        tabBar->hide();
-    }
+    updateTabBarVisibility();
 }
 
 void MainWindow::updateCursorPosition()
@@ -649,10 +993,11 @@ void MainWindow::on_action_open_file_triggered()
     openFiles.append({fileName, QFileInfo(fileName).fileName(), false});
     showEditorInterface();
     ui->tabWidget->addTab(editor, QFileInfo(fileName).fileName());
-    tabBar->addTab(QFileInfo(fileName).fileName());
-    tabBar->setTabButton(tabBar->count() - 1, QTabBar::RightSide, createTabCloseButton(tabBar->count() - 1));
+    int tabBarIndex = tabBar->addTab(QFileInfo(fileName).fileName());
+    tabBar->setTabData(tabBarIndex, fileName);
+    tabBar->setTabButton(tabBarIndex, QTabBar::RightSide, createTabCloseButton(tabBarIndex));
     ui->tabWidget->setCurrentWidget(editor);
-    tabBar->setCurrentIndex(tabBar->count() - 1);
+    tabBar->setCurrentIndex(tabBarIndex);
     currentFile = fileName;
     setWindowTitle(QFileInfo(fileName).fileName() + " - Scriptura");
     showSearchBar(true);
@@ -829,10 +1174,11 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
 
         showEditorInterface();
         ui->tabWidget->addTab(editor, openFile.fileName);
-        tabBar->addTab(openFile.fileName);
-        tabBar->setTabButton(tabBar->count() - 1, QTabBar::RightSide, createTabCloseButton(tabBar->count() - 1));
+        int tabBarIndex = tabBar->addTab(openFile.fileName);
+        tabBar->setTabData(tabBarIndex, path);
+        tabBar->setTabButton(tabBarIndex, QTabBar::RightSide, createTabCloseButton(tabBarIndex));
         ui->tabWidget->setCurrentWidget(editor);
-        tabBar->setCurrentIndex(tabBar->count() - 1);
+        tabBar->setCurrentIndex(tabBarIndex);
 
         currentFile = path;
         setWindowTitle(openFile.fileName + " - Scriptura");
@@ -866,20 +1212,26 @@ void MainWindow::on_tabWidget_tabCloseRequested(int index)
         }
     }
 
-    if (index >= 0 && index < openFiles.size()) {
-        if (openFiles[index].filePath == currentFile) {
-            currentFile = "";
-        }
-        // LSP: Close file in language server
-        QString closedPath = openFiles[index].filePath;
-        QString closedUri = QUrl::fromLocalFile(closedPath).toString();
-        lspClient->didClose(closedUri);
-        openFiles.removeAt(index);
+    QString closedPath = openFiles[index].filePath;
+    if (openFiles[index].filePath == currentFile) {
+        currentFile = "";
     }
+    // LSP: Close file in language server
+    QString closedUri = QUrl::fromLocalFile(closedPath).toString();
+    lspClient->didClose(closedUri);
+    openFiles.removeAt(index);
 
     QWidget *widget = ui->tabWidget->widget(index);
     ui->tabWidget->removeTab(index);
-    tabBar->removeTab(index);
+    
+    // Find and remove the corresponding tabBar tab by file path
+    for (int i = 0; i < tabBar->count(); ++i) {
+        QVariant data = tabBar->tabData(i);
+        if (data.typeId() == QMetaType::QString && data.toString() == closedPath) {
+            tabBar->removeTab(i);
+            break;
+        }
+    }
     delete widget;
 
     if (ui->tabWidget->count() > 0) {
@@ -990,8 +1342,77 @@ void MainWindow::toggleSidebar()
 
 void MainWindow::onTopTabChanged(int index)
 {
-    Q_UNUSED(index);
-    updateTopTabBar();
+    if (index < 0 || index >= tabBar->count())
+        return;
+
+    QVariant data = tabBar->tabData(index);
+    if (data.typeId() == QMetaType::Int) {
+        // Settings tab
+        TabType type = static_cast<TabType>(data.toInt());
+        switch (type) {
+            case TabType::ThemeSettings:
+                editorStack->setCurrentWidget(themeSettingsWidget);
+                break;
+            case TabType::EditorSettings:
+                editorStack->setCurrentWidget(editorSettingsWidget);
+                break;
+            case TabType::KeyboardShortcuts:
+                editorStack->setCurrentWidget(keyboardShortcutsPageWidget);
+                break;
+        }
+    } else if (data.typeId() == QMetaType::QString) {
+        // File tab - find by file path
+        QString filePath = data.toString();
+        for (int i = 0; i < openFiles.size(); ++i) {
+            if (openFiles[i].filePath == filePath) {
+                ui->tabWidget->setCurrentIndex(i);
+                editorStack->setCurrentWidget(ui->tabWidget);
+                break;
+            }
+        }
+    }
+    updateTabBarVisibility();
+}
+
+void MainWindow::onSettingsTabCloseRequested(int tabIndex)
+{
+    if (tabIndex < 0 || tabIndex >= tabBar->count())
+        return;
+
+    TabType type = static_cast<TabType>(tabBar->tabData(tabIndex).toInt());
+    tabBar->removeTab(tabIndex);
+
+    // If the closed tab was the current one, switch to appropriate view
+    if (tabBar->currentIndex() == -1) {
+        if (ui->tabWidget->count() > 0) {
+            showEditorInterface();
+        } else {
+            showWelcomeScreen();
+        }
+    }
+
+    updateTabBarVisibility();
+}
+
+void MainWindow::updateTabBarVisibility()
+{
+    if (ui->tabWidget->count() > 0 || tabBar->count() > 0) {
+        tabBar->show();
+    } else {
+        tabBar->hide();
+    }
+}
+
+QPushButton* MainWindow::createSettingsTabCloseButton(int tabIndex)
+{
+    QPushButton *closeBtn = new QPushButton(tr("\u00D7"));
+    closeBtn->setFixedSize(16, 16);
+    closeBtn->setFlat(true);
+    closeBtn->setCursor(Qt::ArrowCursor);
+    connect(closeBtn, &QPushButton::clicked, this, [this, tabIndex]() {
+        onSettingsTabCloseRequested(tabIndex);
+    });
+    return closeBtn;
 }
 
 void MainWindow::onBottomTabChanged(int index)
@@ -1098,132 +1519,18 @@ void MainWindow::on_action_about_triggered()
 
 void MainWindow::on_action_editor_settings_triggered()
 {
-    QDialog *dialog = new QDialog(this);
-    dialog->setWindowTitle(tr("Editor Settings"));
-    dialog->resize(450, 400);
-
-    QScreen *screen = QApplication::primaryScreen();
-    if (screen) {
-        QRect screenGeometry = screen->availableGeometry();
-        int x = (screenGeometry.width() - dialog->width()) / 2;
-        int y = (screenGeometry.height() - dialog->height()) / 2;
-        dialog->move(x, y);
-    }
-
-    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-
-    CodeEditor *editor = qobject_cast<CodeEditor*>(ui->tabWidget->currentWidget());
-
-    // Font settings
-    QGroupBox *fontGroup = new QGroupBox(tr("Font"), dialog);
-    QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
-    
-    QHBoxLayout *fontNameLayout = new QHBoxLayout();
-    QLabel *fontLabel = new QLabel(tr("Font Family:"), dialog);
-    QFontComboBox *fontCombo = new QFontComboBox(dialog);
-    fontCombo->setFontFilters(QFontComboBox::ScalableFonts);
-    if (editor) fontCombo->setCurrentFont(editor->font());
-    fontNameLayout->addWidget(fontLabel);
-    fontNameLayout->addWidget(fontCombo, 1);
-    fontLayout->addLayout(fontNameLayout);
-    
-    QHBoxLayout *sizeLayout = new QHBoxLayout();
-    QLabel *sizeLabel = new QLabel(tr("Size:"), dialog);
-    QSpinBox *sizeSpin = new QSpinBox(dialog);
-    sizeSpin->setRange(8, 72);
-    if (editor) sizeSpin->setValue(editor->font().pointSize());
-    sizeLayout->addWidget(sizeLabel);
-    sizeLayout->addWidget(sizeSpin);
-    sizeLayout->addStretch();
-    fontLayout->addLayout(sizeLayout);
-    
-    mainLayout->addWidget(fontGroup);
-
-    // Editor behavior
-    QGroupBox *behaviorGroup = new QGroupBox(tr("Behavior"), dialog);
-    QVBoxLayout *behaviorLayout = new QVBoxLayout(behaviorGroup);
-    
-    QHBoxLayout *tabLayout = new QHBoxLayout();
-    QLabel *tabLabel = new QLabel(tr("Tab Width:"), dialog);
-    QSpinBox *tabSpin = new QSpinBox(dialog);
-    tabSpin->setRange(1, 16);
-    if (editor) tabSpin->setValue(editor->tabWidth());
-    tabLayout->addWidget(tabLabel);
-    tabLayout->addWidget(tabSpin);
-    tabLayout->addStretch();
-    behaviorLayout->addLayout(tabLayout);
-    
-    QCheckBox *wordWrapCheckbox = new QCheckBox(tr("Word Wrap"), dialog);
-    if (editor) wordWrapCheckbox->setChecked(editor->lineWrapMode() != QPlainTextEdit::NoWrap);
-    behaviorLayout->addWidget(wordWrapCheckbox);
-    
-    QCheckBox *indentGuidesCheckbox = new QCheckBox(tr("Show Indent Guides"), dialog);
-    if (editor) indentGuidesCheckbox->setChecked(editor->property("showIndentGuides").toBool());
-    behaviorLayout->addWidget(indentGuidesCheckbox);
-    
-    mainLayout->addWidget(behaviorGroup);
-
-    // Display
-    QGroupBox *displayGroup = new QGroupBox(tr("Display"), dialog);
-    QVBoxLayout *displayLayout = new QVBoxLayout(displayGroup);
-    
-    QCheckBox *lineNumbersCheckbox = new QCheckBox(tr("Show Line Numbers"), dialog);
-    if (editor) lineNumbersCheckbox->setChecked(editor->property("showLineNumbers").toBool());
-    displayLayout->addWidget(lineNumbersCheckbox);
-    
-    QHBoxLayout *widthLayout = new QHBoxLayout();
-    QLabel *widthLabel = new QLabel(tr("Editor Width:"), dialog);
-    QSpinBox *widthSpin = new QSpinBox(dialog);
-    widthSpin->setRange(200, 2000);
-    widthSpin->setSuffix(" px");
-    if (editor) widthSpin->setValue(editor->minimumWidth());
-    widthLayout->addWidget(widthLabel);
-    widthLayout->addWidget(widthSpin);
-    widthLayout->addStretch();
-    displayLayout->addLayout(widthLayout);
-    
-    mainLayout->addWidget(displayGroup);
-
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
-    mainLayout->addWidget(buttonBox);
-
-    connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-
-    if (dialog->exec() == QDialog::Accepted) {
-        QSettings settings;
-
-        QFont font = fontCombo->currentFont();
-        font.setPointSize(sizeSpin->value());
-        settings.setValue("editor/font", font);
-
-        int tabWidth = tabSpin->value();
-        settings.setValue("editor/tabWidth", tabWidth);
-
-        int editorWidth = widthSpin->value();
-        settings.setValue("editor/width", editorWidth);
-        
-        bool wordWrap = wordWrapCheckbox->isChecked();
-        settings.setValue("editor/wordWrap", wordWrap);
-        
-        bool showIndentGuides = indentGuidesCheckbox->isChecked();
-        settings.setValue("editor/showIndentGuides", showIndentGuides);
-        
-        bool showLineNumbers = lineNumbersCheckbox->isChecked();
-        settings.setValue("editor/showLineNumbers", showLineNumbers);
-
-        for (int i = 0; i < ui->tabWidget->count(); i++) {
-            if (CodeEditor *ed = qobject_cast<CodeEditor*>(ui->tabWidget->widget(i))) {
-                ed->setFont(font);
-                ed->setTabWidth(tabWidth);
-                if (editorWidth > 0)
-                    ed->setMinimumWidth(editorWidth);
-                ed->setLineWrapMode(wordWrap ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
-                ed->setProperty("showIndentGuides", showIndentGuides);
-                ed->setProperty("showLineNumbers", showLineNumbers);
-            }
+    // Show editor settings as a page in the editor area
+    for (int i = 0; i < tabBar->count(); ++i) {
+        if (static_cast<TabType>(tabBar->tabData(i).toInt()) == TabType::EditorSettings) {
+            tabBar->setCurrentIndex(i);
+            return;
         }
     }
+    // If settings tab doesn't exist yet, add it
+    int editorSettingsTabIndex = tabBar->addTab(tr("Settings"));
+    tabBar->setTabData(editorSettingsTabIndex, static_cast<int>(TabType::EditorSettings));
+    tabBar->setTabButton(editorSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(editorSettingsTabIndex));
+    tabBar->setCurrentIndex(editorSettingsTabIndex);
 }
 
 void MainWindow::applyTheme(const Theme &theme)
@@ -1536,156 +1843,18 @@ void MainWindow::applyTheme(const Theme &theme)
 
 void MainWindow::on_action_theme_triggered()
 {
-    QDialog *dialog = new QDialog(this);
-    dialog->setWindowTitle(tr("Theme Selection"));
-    dialog->resize(500, 350);
-    dialog->setModal(true);
-
-    QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-
-    struct FamilyEntry {
-        ThemeColorFamily family;
-        QString name;
-        QColor lightBg, darkBg;
-        QColor lightText, darkText;
-    };
-
-    FamilyEntry families[] = {
-        {ThemeColorFamily::Default, "Default", QColor(240,240,240), QColor(45,45,45), Qt::black, Qt::white},
-        {ThemeColorFamily::Blue, "Blue", QColor(240,248,255), QColor(25,35,50), Qt::black, Qt::white},
-        {ThemeColorFamily::Green, "Green", QColor(240,255,240), QColor(25,45,30), Qt::black, Qt::white},
-        {ThemeColorFamily::Red, "Red", QColor(255,245,245), QColor(45,25,25), Qt::black, Qt::white},
-        {ThemeColorFamily::Yellow, "Yellow", QColor(255,255,240), QColor(45,45,25), Qt::black, Qt::white},
-        {ThemeColorFamily::Brown, "Brown", QColor(255,250,240), QColor(40,30,20), Qt::black, Qt::white},
-        {ThemeColorFamily::Cyan, "Cyan", QColor(240,255,255), QColor(25,45,45), Qt::black, Qt::white},
-        {ThemeColorFamily::Violet, "Violet", QColor(245,240,255), QColor(35,25,50), Qt::black, Qt::white}
-    };
-
-    QGroupBox *familyGroup = new QGroupBox(tr("Color Family"), dialog);
-    QGridLayout *familyGrid = new QGridLayout(familyGroup);
-    QButtonGroup *familyBtnGroup = new QButtonGroup(familyGroup);
-
-    int familySelected = static_cast<int>(selectedTheme.family);
-    for (int i = 0; i < 8; ++i) {
-        QPushButton *btn = new QPushButton(families[i].name, familyGroup);
-        btn->setCheckable(true);
-        btn->setProperty("familyIdx", i);
-        updateFamilyButtonPreview(btn, families[i].family, selectedTheme.mode, selectedTheme.features);
-        familyGrid->addWidget(btn, i / 4, i % 4);
-        familyBtnGroup->addButton(btn);
-        if (i == familySelected)
-            btn->setChecked(true);
-    }
-
-    QGroupBox *modeGroup = new QGroupBox(tr("Mode"), dialog);
-    QHBoxLayout *modeLayout = new QHBoxLayout(modeGroup);
-    QRadioButton *lightRadio = new QRadioButton(tr("Light"), modeGroup);
-    QRadioButton *darkRadio = new QRadioButton(tr("Dark"), modeGroup);
-    QButtonGroup *modeBtnGroup = new QButtonGroup(modeGroup);
-    modeBtnGroup->addButton(lightRadio);
-    modeBtnGroup->addButton(darkRadio);
-    modeLayout->addWidget(lightRadio);
-    modeLayout->addWidget(darkRadio);
-    if (selectedTheme.mode == ThemeMode::Light)
-        lightRadio->setChecked(true);
-    else
-        darkRadio->setChecked(true);
-
-    QGroupBox *featuresGroup = new QGroupBox(tr("Features"), dialog);
-    QVBoxLayout *featuresLayout = new QVBoxLayout(featuresGroup);
-    QCheckBox *hcCheckbox = new QCheckBox(tr("High Contrast"), featuresGroup);
-    hcCheckbox->setChecked(selectedTheme.features.testFlag(ThemeFeature::HighContrast));
-    featuresLayout->addWidget(hcCheckbox);
-
-    Theme currentTheme = selectedTheme;
-
-    // Preview area
-    QGroupBox *previewGroup = new QGroupBox(tr("Preview"), dialog);
-    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
-    QLabel *previewLabel = new QLabel(tr("Sample text with <b>bold</b>, <i>italic</i>, and <a href=\"#\">link</a>."), dialog);
-    previewLabel->setWordWrap(true);
-    previewLabel->setTextFormat(Qt::RichText);
-    previewLabel->setOpenExternalLinks(false);
-    previewLayout->addWidget(previewLabel);
-    QPushButton *sampleButton = new QPushButton(tr("Sample Button"), dialog);
-    previewLayout->addWidget(sampleButton);
-
-    mainLayout->addWidget(familyGroup);
-    mainLayout->addWidget(modeGroup);
-    mainLayout->addWidget(featuresGroup);
-    mainLayout->addWidget(previewGroup);
-
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-    QPushButton *applyButton = new QPushButton(tr("Apply"), dialog);
-    applyButton->setDefault(true);
-    buttonLayout->addWidget(applyButton);
-    mainLayout->addLayout(buttonLayout);
-
-    // Update preview when theme changes
-    auto updatePreview = [&]() {
-        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        ThemeFeatures features;
-        if (hcCheckbox->isChecked())
-            features |= ThemeFeature::HighContrast;
-        
-        QPalette p = buildBasePalette(currentTheme.family, mode);
-        if (features.testFlag(ThemeFeature::HighContrast))
-            applyHighContrastPalette(p, currentTheme.family, mode);
-        
-        previewLabel->setStyleSheet(QString("color: %1; background-color: %2; padding: 8px; border-radius: 4px;")
-                                   .arg(p.color(QPalette::WindowText).name())
-                                   .arg(p.color(QPalette::Base).name()));
-        sampleButton->setStyleSheet(QString("background-color: %1; color: %2; border: 1px solid %2; padding: 6px 12px; border-radius: 4px;")
-                                   .arg(p.color(QPalette::Button).name())
-                                   .arg(p.color(QPalette::ButtonText).name()));
-    };
-
-    auto refreshFamilyPreviews = [&]() {
-        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        ThemeFeatures features;
-        if (hcCheckbox->isChecked())
-            features |= ThemeFeature::HighContrast;
-        for (int i = 0; i < 8; ++i) {
-            QAbstractButton *abtn = familyBtnGroup->button(i);
-            QPushButton *btn = qobject_cast<QPushButton*>(abtn);
-            if (btn)
-                updateFamilyButtonPreview(btn, families[i].family, mode, features);
+    // Show theme settings as a page in the editor area
+    for (int i = 0; i < tabBar->count(); ++i) {
+        if (static_cast<TabType>(tabBar->tabData(i).toInt()) == TabType::ThemeSettings) {
+            tabBar->setCurrentIndex(i);
+            return;
         }
-        currentTheme.mode = mode;
-        currentTheme.features = features;
-    };
-
-    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
-        currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
-        currentTheme.mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        currentTheme.features = hcCheckbox->isChecked() ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures();
-        updatePreview();
-    });
-
-    connect(lightRadio, &QRadioButton::toggled, [&]() {
-        refreshFamilyPreviews();
-        updatePreview();
-    });
-    connect(hcCheckbox, &QCheckBox::toggled, [&]() {
-        refreshFamilyPreviews();
-        updatePreview();
-    });
-    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
-        currentTheme.family = static_cast<ThemeColorFamily>(button->property("familyIdx").toInt());
-        updatePreview();
-    });
-
-    connect(applyButton, &QPushButton::clicked, dialog, &QDialog::accept);
-
-    // Initial preview update
-    updatePreview();
-
-    int result = dialog->exec();
-    if (result == QDialog::Accepted && currentTheme != selectedTheme) {
-        selectedTheme = currentTheme;
-        applyTheme(selectedTheme);
     }
+    // If theme tab doesn't exist yet, add it
+    int themeSettingsTabIndex = tabBar->addTab(tr("Theme"));
+    tabBar->setTabData(themeSettingsTabIndex, static_cast<int>(TabType::ThemeSettings));
+    tabBar->setTabButton(themeSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(themeSettingsTabIndex));
+    tabBar->setCurrentIndex(themeSettingsTabIndex);
 }
 
 void MainWindow::on_action_license_triggered()
@@ -2337,7 +2506,20 @@ void MainWindow::updateTabModified(int index, bool modified)
 
 void MainWindow::updateTopTabBar()
 {
-    tabBar->setCurrentIndex(ui->tabWidget->currentIndex());
+    int currentFileIndex = ui->tabWidget->currentIndex();
+    if (currentFileIndex >= 0 && currentFileIndex < openFiles.size()) {
+        QString currentFilePath = openFiles[currentFileIndex].filePath;
+        for (int i = 0; i < tabBar->count(); ++i) {
+            QVariant data = tabBar->tabData(i);
+            if (data.typeId() == QMetaType::QString && data.toString() == currentFilePath) {
+                QSignalBlocker blocker(tabBar);
+                tabBar->setCurrentIndex(i);
+                return;
+            }
+        }
+    }
+    QSignalBlocker blocker(tabBar);
+    tabBar->setCurrentIndex(-1);
 }
 
 void MainWindow::updateBottomTabBar()
@@ -2469,44 +2651,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::showKeyboardShortcuts()
 {
-    QDialog *dialog = new QDialog(this);
-    dialog->setWindowTitle(tr("Keyboard Shortcuts"));
-    dialog->resize(400, 300);
-    dialog->setModal(true);
-
-    QVBoxLayout *layout = new QVBoxLayout(dialog);
-
-    QLabel *shortcutsLabel = new QLabel(tr(
-        "<b>File Operations:</b><br>"
-        "Ctrl+N: New File &nbsp;&nbsp; "
-        "Ctrl+S: Save &nbsp;&nbsp; "
-        "Ctrl+Shift+S: Save As &nbsp;&nbsp; "
-        "Ctrl+O: Open File<br><br>"
-        "<b>Edit Operations:</b><br>"
-        "Ctrl+Z: Undo &nbsp;&nbsp; "
-        "Ctrl+Y: Redo &nbsp;&nbsp; "
-        "Ctrl+X: Cut &nbsp;&nbsp; "
-        "Ctrl+C: Copy &nbsp;&nbsp; "
-        "Ctrl+V: Paste<br><br>"
-        "<b>View/Navigation:</b><br>"
-        "Ctrl+F: Find &nbsp;&nbsp; "
-        "F3: Find Next &nbsp;&nbsp; "
-        "Shift+F3: Find Previous &nbsp;&nbsp; "
-        "Ctrl+K: Keyboard Shortcuts<br><br>"
-        "<b>Project:</b><br>"
-        "Ctrl+E: Project Settings &nbsp;&nbsp; "
-        "Ctrl+T: Theme Selection"
-    ), dialog);
-    shortcutsLabel->setTextFormat(Qt::RichText);
-    shortcutsLabel->setAlignment(Qt::AlignLeft);
-    layout->addWidget(shortcutsLabel);
-
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok, dialog);
-    layout->addWidget(buttonBox);
-
-    connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-
-    dialog->exec();
+    // Show keyboard shortcuts as a page in the editor area
+    for (int i = 0; i < tabBar->count(); ++i) {
+        if (static_cast<TabType>(tabBar->tabData(i).toInt()) == TabType::KeyboardShortcuts) {
+            tabBar->setCurrentIndex(i);
+            return;
+        }
+    }
+    // If keyboard shortcuts tab doesn't exist yet, add it
+    int keyboardShortcutsTabIndex = tabBar->addTab(tr("Keys"));
+    tabBar->setTabData(keyboardShortcutsTabIndex, static_cast<int>(TabType::KeyboardShortcuts));
+    tabBar->setTabButton(keyboardShortcutsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(keyboardShortcutsTabIndex));
+    tabBar->setCurrentIndex(keyboardShortcutsTabIndex);
 }
 
 Theme MainWindow::themeFromLegacyInt(int legacy) const
