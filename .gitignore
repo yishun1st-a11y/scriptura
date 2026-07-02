@@ -67,17 +67,24 @@ CMakeLists.txt.user*
 *.Release
 
 # Binaries
+scriptura
 *.dll
 *.exe
 
 # Directories with generated files
- .moc/
- .obj/
- .pch/
- .rcc/
- .uic/
- /build*/
- /cmake-build-*/
+.moc/
+.obj/
+.pch/
+.rcc/
+.uic/
+/build/
+/cmake-build-*/
+
+# Downloaded packages
+*.deb
+
+# IDE/tool directories
+.qodo/
 
 # Qt autogen
 *_autogen/

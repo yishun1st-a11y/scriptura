@@ -318,9 +318,9 @@
     <property name="title">
      <string>&amp;Settings</string>
     </property>
-    <addaction name="action_about"/>
-    <addaction name="separator"/>
-    <addaction name="action_editor_settings"/>
+     <addaction name="action_about"/>
+     <addaction name="separator"/>
+     <addaction name="action_editor_settings"/>
     <addaction name="action_theme"/>
     <addaction name="action_license"/>
    </widget>
@@ -430,12 +430,12 @@
     <string>&amp;Push...</string>
    </property>
   </action>
-  <action name="action_about">
-   <property name="text">
-    <string>&amp;About</string>
-   </property>
-  </action>
-  <action name="action_editor_settings">
+   <action name="action_about">
+    <property name="text">
+     <string>&amp;About</string>
+    </property>
+   </action>
+   <action name="action_editor_settings">
    <property name="text">
     <string>&amp;Editor Settings</string>
    </property>
