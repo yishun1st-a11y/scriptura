@@ -1,6 +1,8 @@
 # Scriptura
 
-![Scriptura Icon](icon.png)
+<img src="icon.png" alt="Scriptura Icon" width="64"/>
+
+![Scriptura Preview](.github/assets/preview.gif)
 
 [![Storage](https://img.shields.io/github/repo-size/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura)
 [![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/stargazers)
