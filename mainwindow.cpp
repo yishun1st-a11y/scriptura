@@ -181,11 +181,6 @@ MainWindow::MainWindow(QWidget *parent)
     settingsButton->setToolTip(tr("Editor Settings"));
     ui->topToolbarLayout->addWidget(settingsButton);
 
-    whatsappButton = new QToolButton(ui->topToolbar);
-    whatsappButton->setText(tr("\u2713"));
-    whatsappButton->setToolTip(tr("WhatsApp Web"));
-    ui->topToolbarLayout->addWidget(whatsappButton);
-
     // Sidebar icon buttons (bottom of drawer)
     fileTreeToggleButton = new QToolButton(ui->sidebarDrawer);
     fileTreeToggleButton->setText(tr("\u2637"));
@@ -278,10 +273,9 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
-    // Theme, settings, and WhatsApp buttons
+    // Theme and settings buttons
     connect(themeButton, &QToolButton::clicked, this, &MainWindow::on_action_theme_triggered);
     connect(settingsButton, &QToolButton::clicked, this, &MainWindow::on_action_editor_settings_triggered);
-    connect(whatsappButton, &QToolButton::clicked, this, &MainWindow::openWhatsappWeb);
 
     // File tree
     connect(ui->fileTreeView, &QTreeView::clicked, this, &MainWindow::on_fileTreeView_clicked);
@@ -1891,33 +1885,6 @@ void MainWindow::on_action_license_triggered()
         "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
         "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n"
         "SOFTWARE."));
-  }
-
-  void MainWindow::openWhatsappWeb()
-  {
-      static const char *browsers[] = {
-          "chromium", "chromium-browser", "google-chrome", "chrome",
-          "brave-browser", "brave", "microsoft-edge", "msedge", "firefox", nullptr
-      };
-      const char *selected = nullptr;
-      for (int i = 0; browsers[i]; ++i) {
-          if (!QStandardPaths::findExecutable(browsers[i]).isEmpty()) {
-              selected = browsers[i];
-              break;
-          }
-      }
-      QString url = QStringLiteral("https://web.whatsapp.com");
-      if (selected) {
-          QStringList args;
-          if (QString::fromLatin1(selected) == QStringLiteral("firefox")) {
-              args << "--new-window" << url;
-          } else {
-              args << "--app" << url;
-          }
-          QProcess::startDetached(QString::fromLatin1(selected), args);
-          return;
-      }
-      QDesktopServices::openUrl(QUrl(url));
   }
 
   void MainWindow::setSidebarCollapsed(bool collapsed)

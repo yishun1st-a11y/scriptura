@@ -158,7 +158,6 @@ private:
     QToolButton *sidebarToggleButton;
     QToolButton *themeButton;
     QToolButton *settingsButton;
-    QToolButton *whatsappButton;
     QTabBar *tabBar;
     QTabBar *bottomPanelTabs;
     QStackedWidget *bottomPanelStack;
@@ -229,7 +228,6 @@ private:
     void updateRecentProjectsOnWelcome();
     void autoSave();
     bool checkUnsavedChanges();
-    void openWhatsappWeb();
 
     QPalette buildBasePalette(ThemeColorFamily family, ThemeMode mode);
     QColor highContrastAccentColor(ThemeColorFamily family, ThemeMode mode);
