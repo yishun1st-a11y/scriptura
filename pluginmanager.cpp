@@ -106,7 +106,31 @@ bool PluginManager::loadPlugin(const QString& filePath)
         return false;
     }
     
+    // Handle platform-specific library extensions
     QString libraryPath = pluginDir.absoluteFilePath(libraryName);
+    if (!QFile::exists(libraryPath)) {
+        // Try platform-specific extension if the specified one doesn't exist
+        QString baseName = libraryName;
+        
+        // Remove existing extension if present
+        int lastDot = baseName.lastIndexOf('.');
+        if (lastDot > 0) {
+            baseName = baseName.left(lastDot);
+        }
+        
+        // Try platform-specific extension
+        #ifdef Q_OS_WIN
+            QString platformLibrary = baseName + ".dll";
+        #elif defined(Q_OS_MAC)
+            QString platformLibrary = baseName + ".dylib";
+        #else
+            QString platformLibrary = baseName + ".so";
+        #endif
+        
+        libraryPath = pluginDir.absoluteFilePath(platformLibrary);
+        qDebug() << "Library not found at" << pluginDir.absoluteFilePath(libraryName) 
+                 << ", trying platform-specific:" << libraryPath;
+    }
     QPluginLoader* loader = new QPluginLoader(libraryPath, this);
     
     QObject* pluginObj = loader->instance();

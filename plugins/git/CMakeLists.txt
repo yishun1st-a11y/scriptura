@@ -7,8 +7,9 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 尋找 Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+# 尋找 Qt（支援 Qt5 和 Qt6）
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets)
 
 # 建立插件共享庫
 add_library(gitplugin SHARED
@@ -25,8 +26,8 @@ set_target_properties(gitplugin PROPERTIES
 
 # 連結 Qt 庫
 target_link_libraries(gitplugin PRIVATE
-    Qt6::Core
-    Qt6::Widgets
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Widgets
 )
 
 # 包含目錄（包含 Scriptura 標頭）
