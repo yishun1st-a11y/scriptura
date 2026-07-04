@@ -5,9 +5,8 @@
 ![Scriptura Preview](.github/assets/preview.gif)
 
 [![Storage](https://img.shields.io/github/repo-size/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura)
-[![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/stargazers)
-[![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura/network/members)
-[![Build Scriptura](https://github.com/jason1015-coder/scriptura/actions/workflows/build.yml/badge.svg)](https://github.com/jason1015-coder/scriptura/actions/workflows/build.yml)
+[![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura/stargazers)](https://github.com/jason1015-coder/scriptura/stargazers)
+[![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura/network/members)](https://github.com/jason1015-coder/scriptura/network/members)
 
 A simple Qt-based text editor with project file browsing.
 
@@ -23,6 +22,9 @@ A simple Qt-based text editor with project file browsing.
 - **Delete files/directories**: Remove files or directories from the project
 - **Save As**: Save files with a different name
 - **Theme support**: Multiple light/dark themes available
+- **Plugin Manager**: Install, remove, and manage plugins via the GUI (**Plugins → Manage Plugins...**). Manual plugin installation is not supported.
+- **Plugin system**: Extensible architecture with event bus, service locator, and settings support
+- **Built-in Git plugin**: Version control integration for commits and pushes
 
 ## Building
 
@@ -63,6 +65,11 @@ Or directly:
 - Qt 5 or Qt 6 (with Widgets, Network, and LinguistTools modules)
 - CMake 3.16+
 - C++17 compiler
+
+## Documentation
+
+- [How to Develop a Plugin](docs/how-to-develop-a-plugin.md)
+- [How to Install a Plugin](docs/how-to-install-a-plugin.md)
 
 ## CI/CD
 

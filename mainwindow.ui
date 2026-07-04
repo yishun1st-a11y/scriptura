@@ -314,21 +314,28 @@
     <addaction name="action_git_commit"/>
     <addaction name="action_git_push"/>
    </widget>
-   <widget class="QMenu" name="menu_settings">
-    <property name="title">
-     <string>&amp;Settings</string>
-    </property>
-     <addaction name="action_about"/>
-     <addaction name="separator"/>
-     <addaction name="action_editor_settings"/>
-    <addaction name="action_theme"/>
-    <addaction name="action_license"/>
-   </widget>
-   <addaction name="menu_File"/>
-   <addaction name="menu_edit"/>
-   <addaction name="menu_terminal"/>
-   <addaction name="menu_git"/>
-   <addaction name="menu_settings"/>
+    <widget class="QMenu" name="menu_settings">
+     <property name="title">
+      <string>&amp;Settings</string>
+     </property>
+      <addaction name="action_about"/>
+      <addaction name="separator"/>
+      <addaction name="action_editor_settings"/>
+     <addaction name="action_theme"/>
+     <addaction name="action_license"/>
+    </widget>
+    <widget class="QMenu" name="menu_plugins">
+     <property name="title">
+      <string>&amp;Plugins</string>
+     </property>
+     <addaction name="action_manage_plugins"/>
+    </widget>
+    <addaction name="menu_File"/>
+    <addaction name="menu_edit"/>
+    <addaction name="menu_terminal"/>
+    <addaction name="menu_git"/>
+    <addaction name="menu_plugins"/>
+    <addaction name="menu_settings"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="action_open_project">
@@ -445,12 +452,17 @@
     <string>&amp;License</string>
    </property>
   </action>
-  <action name="action_theme">
-   <property name="text">
-    <string>&amp;Theme</string>
-   </property>
-  </action>
- </widget>
+   <action name="action_theme">
+    <property name="text">
+     <string>&amp;Theme</string>
+    </property>
+   </action>
+   <action name="action_manage_plugins">
+    <property name="text">
+     <string>&amp;Manage Plugins...</string>
+    </property>
+   </action>
+  </widget>
  <resources/>
  <connections/>
 </ui>

@@ -1,0 +1,73 @@
+cmake_minimum_required(VERSION 3.16)
+project(GitPlugin)
+
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 尋找 Qt6
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+
+# 建立插件共享庫
+add_library(gitplugin SHARED
+    gitplugin.cpp
+    gitplugin.h
+)
+
+# 設定目標屬性
+set_target_properties(gitplugin PROPERTIES
+    OUTPUT_NAME gitplugin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins/git
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins/git
+)
+
+# 連結 Qt 庫
+target_link_libraries(gitplugin PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+# 包含目錄（包含 Scriptura 標頭）
+target_include_directories(gitplugin PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/plugins/git
+)
+
+# 安裝規則
+install(TARGETS gitplugin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/scriptura/plugins/git
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/scriptura/plugins/git
+)
+
+# 安裝元數據
+install(FILES git.json
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/scriptura/plugins/git
+)
+
+# 安裝資源（如果有）
+# install(DIRECTORY resources/
+#     DESTINATION ${CMAKE_INSTALL_DATADIR}/scriptura/plugins/git/resources
+# )
+
+# Windows 特定設定
+if(WIN32)
+    set_target_properties(gitplugin PROPERTIES
+        SUFFIX ".dll"
+    )
+endif()
+
+# macOS 特定設定
+if(APPLE)
+    set_target_properties(gitplugin PROPERTIES
+        SUFFIX ".dylib"
+    )
+endif()
+
+# Linux 特定設定
+if(UNIX AND NOT APPLE)
+    set_target_properties(gitplugin PROPERTIES
+        SUFFIX ".so"
+    )
+endif()

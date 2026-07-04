@@ -34,6 +34,8 @@
 #include "terminalpanel.h"
 #include "updater.h"
 #include "configvalidator.h"
+#include "pluginmanager.h"
+#include "plugincontext.h"
 
 enum class ThemeColorFamily {
     Default = 0,
@@ -87,6 +89,8 @@ struct OpenFile {
     bool modified = false;
 };
 
+class PluginManagerDialog;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -94,6 +98,13 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+    CodeEditor* getCurrentCodeEditor();
+    QString currentProjectPath() const { return projectDir; }
+    LspClient* getLspClient() const { return lspClient; }
+    ProblemPanel* getProblemPanel() const { return problemPanel; }
+    TerminalPanel* getTerminalPanel() const { return terminalPanel; }
+    GitPanel* getGitPanel() const { return gitPanel; }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -117,6 +128,7 @@ private slots:
     void on_action_editor_settings_triggered();
     void on_action_theme_triggered();
     void on_action_license_triggered();
+    void on_action_manage_plugins_triggered();
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
@@ -188,6 +200,9 @@ private:
     Updater *updater;
     ConfigValidator *configValidator;
     LspClient *lspClient;
+    PluginManager *pluginManager;
+    PluginContext *pluginContext;
+    PluginManagerDialog *pluginManagerDialog;
     int m_previousEditorStackIndex;
 
     void updateCursorPosition();
@@ -201,7 +216,6 @@ private:
     QPushButton* createSettingsTabCloseButton(int tabIndex);
     QString findTerminal();
     QPlainTextEdit* getCurrentEditor();
-    CodeEditor* getCurrentCodeEditor();
     QWidget* createWelcomeWidget();
     QWidget* createKeyboardShortcutsWidget();
     QWidget* createThemeSettingsWidget();

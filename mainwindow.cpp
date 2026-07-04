@@ -8,6 +8,9 @@
 #include "terminalpanel.h"
 #include "updater.h"
 #include "configvalidator.h"
+#include "pluginmanager.h"
+#include "plugincontext.h"
+#include "pluginmanagerdialog.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -58,9 +61,19 @@ MainWindow::MainWindow(QWidget *parent)
     , updater(new Updater(this))
     , configValidator(new ConfigValidator(this))
     , lspClient(new LspClient(this))
+    , pluginManager(new PluginManager(this))
+    , pluginContext(new PluginContext(this, this))
+    , pluginManagerDialog(new PluginManagerDialog(pluginManager, pluginContext, this))
     , m_previousEditorStackIndex(0)
 {
     ui->setupUi(this);
+
+    pluginManager->setContext(pluginContext);
+    
+    QSet<QString> allowed;
+    allowed.insert("com.scriptura.git");
+    pluginManager->setAllowedPlugins(allowed);
+    pluginManager->loadPlugins(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/plugins");
 
     loadRecentProjects();
 
@@ -1885,6 +1898,14 @@ void MainWindow::on_action_license_triggered()
         "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
         "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n"
         "SOFTWARE."));
+  }
+
+  void MainWindow::on_action_manage_plugins_triggered()
+  {
+      if (pluginManagerDialog) {
+          pluginManagerDialog->refresh();
+          pluginManagerDialog->show();
+      }
   }
 
   void MainWindow::setSidebarCollapsed(bool collapsed)

@@ -69,6 +69,9 @@ int main(int argc, char *argv[])
 {
     CrashHandler::install();
 
+    QApplication::setOrganizationName("Scriptura");
+    QApplication::setApplicationName("Scriptura");
+
     QApplication a(argc, argv);
 
     a.setStyleSheet(R"(

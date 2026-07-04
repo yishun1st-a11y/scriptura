@@ -39,6 +39,29 @@ set(PROJECT_SOURCES
         updater.h
         configvalidator.cpp
         configvalidator.h
+        # Plugin System
+        pluginfeature.h
+        plugininterface.h
+        plugincontext.h
+        plugincontext.cpp
+        eventbus.h
+        eventbus.cpp
+        servicelocator.h
+        servicelocator.cpp
+        dependencyresolver.h
+        dependencyresolver.cpp
+        pluginmanager.h
+        pluginmanager.cpp
+        pluginsettings.h
+        pluginsettings.cpp
+        pluginupdater.h
+        pluginupdater.cpp
+        plugincrashhandler.h
+        plugincrashhandler.cpp
+        pluginmanagerdialog.h
+        pluginmanagerdialog.cpp
+        permission.h
+        permission.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -69,6 +92,20 @@ else()
 endif()
 
 target_link_libraries(scriptura PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+
+# Plugin system configuration
+set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/scriptura/plugins")
+set(PLUGIN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/plugins")
+
+set_target_properties(scriptura PROPERTIES
+    QT_PLUGIN_PATH "${PLUGIN_OUTPUT_DIR}"
+)
+
+# Add plugin subdirectories
+add_subdirectory(plugins/git)
+
+# Add tests
+add_subdirectory(tests)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
