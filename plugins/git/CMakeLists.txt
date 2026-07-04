@@ -26,6 +26,7 @@ set_target_properties(gitplugin PROPERTIES
 
 # 連結 Qt 庫
 target_link_libraries(gitplugin PRIVATE
+    scriptura
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Widgets
 )

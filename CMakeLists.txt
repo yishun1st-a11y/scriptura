@@ -93,6 +93,10 @@ endif()
 
 target_link_libraries(scriptura PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 
+if(WIN32)
+    set_target_properties(scriptura PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
+
 # Plugin system configuration
 set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/scriptura/plugins")
 set(PLUGIN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/plugins")
