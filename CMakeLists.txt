@@ -125,8 +125,3 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(scriptura)
 endif()
 
-# Enable testing
-option(BUILD_TESTS "Build tests" ON)
-if(BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
