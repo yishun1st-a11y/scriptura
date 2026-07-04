@@ -42,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scriptura-macos
-          path: build/Scriptura.app
+          path: build/scriptura.app
           retention-days: 14
 
   build-windows:
@@ -69,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scriptura-windows
-          path: build/Release/scriptura.exe
+          path: build/scriptura.exe
           retention-days: 14
