@@ -1,16 +1,24 @@
 #include "pluginmanager.h"
 #include "eventbus.h"
 #include "servicelocator.h"
+#include "versionfetcher.h"
 #include <QDebug>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QFileInfo>
+
+const QString PluginManager::DISABLED_PLUGINS_FILE = "disabled_plugins.json";
 
 PluginManager::PluginManager(QObject* parent)
     : QObject(parent)
     , m_context(nullptr)
 {
+    loadDisabledPlugins();
 }
 
 PluginManager::~PluginManager()
 {
+    saveDisabledPlugins();
     unloadAllPlugins();
 }
 
@@ -39,6 +47,14 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
             if (QFile::exists(metadataFile)) {
                 QJsonObject metadata;
                 if (loadPluginMetadata(info.absoluteFilePath(), metadata)) {
+                    QString pluginId = metadata["id"].toString();
+                    
+                    // 跳過停用的插件
+                    if (m_disabledPlugins.contains(pluginId)) {
+                        qDebug() << "Plugin" << pluginId << "is disabled, skipping";
+                        continue;
+                    }
+                    
                     pluginMetadata.append(metadata);
                     if (metadata.contains("id")) {
                         m_pluginPaths[metadata["id"].toString()] = info.absoluteFilePath();
@@ -48,11 +64,11 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第二階段：驗證依賴關係
-    QList<DependencyResolver::DependencyError> errors = m_resolver.validate(pluginMetadata);
+    // 第二階段：驗證依賴關係（先做基本驗證，使用空集合因為尚未載入任何插件）
+    QList<DependencyResolver::DependencyError> errors = m_resolver.validate(pluginMetadata, QSet<QString>());
     for (const auto& error : errors) {
         if (!error.isOptional) {
-            qWarning() << "Missing required dependency:" << error.missingDependency 
+            qWarning() << "Missing required dependency:" << error.missingDependency
                        << "for plugin" << error.pluginId;
         }
     }
@@ -64,16 +80,54 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
     
     // 第四階段：按依賴順序載入
     QStringList loadOrder = topologicalSort();
+    QSet<QString> failedPlugins;
+    
     for (const QString& pluginId : loadOrder) {
         if (!loadPluginById(pluginId)) {
             qWarning() << "Failed to load plugin:" << pluginId;
+            failedPlugins.insert(pluginId);
         }
     }
     
-    // 第五階段：初始化所有插件
+    // 第五階段：檢查是否有依賴失敗插件的插件，如果有則卸載
+    for (const QString& pluginId : loadOrder) {
+        if (failedPlugins.contains(pluginId)) {
+            continue;  // 跳過已失敗的
+        }
+        
+        if (m_plugins.contains(pluginId)) {
+            const PluginInfo& info = m_plugins[pluginId];
+            for (const QString& dep : info.dependencies) {
+                if (failedPlugins.contains(dep)) {
+                    qWarning() << "Skipping plugin" << pluginId << "due to failed dependency:" << dep;
+                    unloadPlugin(pluginId);
+                    failedPlugins.insert(pluginId);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // 第六階段：使用 actuallyLoaded 重新驗證依賴
+    QSet<QString> loadedIds;
+    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
+        if (it.value().instance) {
+            loadedIds.insert(it.key());
+        }
+    }
+    
+    QList<DependencyResolver::DependencyError> finalErrors = m_resolver.validate(pluginMetadata, loadedIds);
+    for (const auto& error : finalErrors) {
+        if (!error.isOptional) {
+            qWarning() << "Dependency not loaded:" << error.missingDependency
+                       << "for plugin" << error.pluginId;
+        }
+    }
+    
+    // 第七階段：初始化所有成功載入的插件
     initializePlugins();
     
-    return true;
+    return failedPlugins.isEmpty();
 }
 
 bool PluginManager::loadPlugin(const QString& filePath)
@@ -144,6 +198,14 @@ bool PluginManager::loadPlugin(const QString& filePath)
     ScripturaPlugin* plugin = qobject_cast<ScripturaPlugin*>(pluginObj);
     if (!plugin) {
         qWarning() << "Plugin does not implement ScripturaPlugin interface:" << pluginId;
+        delete loader;
+        return false;
+    }
+    
+    // 檢查版本相容性
+    if (!checkVersionCompatibility(metadata)) {
+        qWarning() << "Plugin" << pluginId << "is not compatible with current Scriptura version";
+        emit pluginIncompatible(pluginId, VersionFetcher::coreVersion());
         delete loader;
         return false;
     }
@@ -438,4 +500,160 @@ bool PluginManager::isAllowed(const QString& id) const
 QSet<QString> PluginManager::allowedPlugins() const
 {
     return m_allowedPlugins;
+}
+
+bool PluginManager::checkVersionCompatibility(const QJsonObject& metadata) const
+{
+    if (!metadata.contains("incompatible_with")) {
+        return true;  // 沒有標記不相容，視為相容
+    }
+    
+    QString currentVersion = VersionFetcher::coreVersion();
+    QJsonArray incompatibleArray = metadata["incompatible_with"].toArray();
+    QStringList incompatibleVersions;
+    for (const QJsonValue& val : incompatibleArray) {
+        incompatibleVersions.append(val.toString());
+    }
+    
+    return !incompatibleVersions.contains(currentVersion);
+}
+
+bool PluginManager::disablePlugin(const QString& id)
+{
+    if (!m_plugins.contains(id)) {
+        return false;
+    }
+    
+    PluginInfo& info = m_plugins[id];
+    if (info.state == PluginState::Disabled) {
+        return true;
+    }
+    
+    // 執行 shutdown
+    if (info.instance && info.initialized) {
+        try {
+            info.instance->shutdown();
+        } catch (const std::exception& e) {
+            qWarning() << "Exception during plugin shutdown:" << e.what();
+        }
+    }
+    
+    // 卸載插件
+    if (info.loader) {
+        info.loader->unload();
+        delete info.loader;
+        info.loader = nullptr;
+    }
+    
+    info.instance = nullptr;
+    info.initialized = false;
+    info.state = PluginState::Disabled;
+    
+    m_disabledPlugins.insert(id);
+    saveDisabledPlugins();
+    
+    emit pluginUnloaded(id);
+    return true;
+}
+
+bool PluginManager::enablePlugin(const QString& id)
+{
+    if (!m_disabledPlugins.contains(id)) {
+        return false;
+    }
+    
+    m_disabledPlugins.remove(id);
+    saveDisabledPlugins();
+    
+    // 嘗試重新載入
+    if (m_pluginPaths.contains(id)) {
+        return loadPlugin(m_pluginPaths[id]);
+    }
+    
+    return false;
+}
+
+bool PluginManager::reloadPlugin(const QString& id)
+{
+    if (!m_plugins.contains(id)) {
+        return false;
+    }
+    
+    // 先停用
+    if (!disablePlugin(id)) {
+        return false;
+    }
+    
+    // 從停用列表中移除
+    m_disabledPlugins.remove(id);
+    saveDisabledPlugins();
+    
+    // 重新載入
+    if (m_pluginPaths.contains(id)) {
+        return loadPlugin(m_pluginPaths[id]);
+    }
+    
+    return false;
+}
+
+bool PluginManager::isDisabled(const QString& id) const
+{
+    return m_disabledPlugins.contains(id);
+}
+
+QSet<QString> PluginManager::disabledPlugins() const
+{
+    return m_disabledPlugins;
+}
+
+void PluginManager::loadDisabledPlugins()
+{
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QString filePath = configPath + "/" + DISABLED_PLUGINS_FILE;
+    
+    QFile file(filePath);
+    if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    
+    QByteArray content = file.readAll();
+    file.close();
+    
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(content, &error);
+    
+    if (error.error != QJsonParseError::NoError) {
+        qWarning() << "Failed to parse disabled plugins file:" << error.errorString();
+        return;
+    }
+    
+    if (doc.isArray()) {
+        QJsonArray array = doc.array();
+        for (const QJsonValue& val : array) {
+            m_disabledPlugins.insert(val.toString());
+        }
+    }
+}
+
+void PluginManager::saveDisabledPlugins() const
+{
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir dir(configPath);
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    
+    QString filePath = configPath + "/" + DISABLED_PLUGINS_FILE;
+    
+    QJsonArray array;
+    for (const QString& id : m_disabledPlugins) {
+        array.append(id);
+    }
+    
+    QJsonDocument doc(array);
+    QFile file(filePath);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(doc.toJson());
+        file.close();
+    }
 }

@@ -37,6 +37,7 @@ private slots:
     void refreshPluginList();
     void installPlugin();
     void removeSelectedPlugin();
+    void togglePluginState();
     void onPluginSelectionChanged();
     void onPluginDoubleClicked(QListWidgetItem *item);
 
@@ -52,6 +53,7 @@ private:
         QStringList dependencies;
         QStringList permissions;
         bool loaded;
+        bool enabled;
     };
 
     void loadAvailablePlugins();
@@ -71,6 +73,7 @@ public:
     QTextEdit *m_detailsText;
     QPushButton *m_installButton;
     QPushButton *m_removeButton;
+    QPushButton *m_toggleStateButton;
     QPushButton *m_refreshButton;
     QPushButton *m_closeButton;
     QList<PluginInfo> m_plugins;

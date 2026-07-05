@@ -33,17 +33,18 @@ EventBus::~EventBus()
 
 void EventBus::publish(const QString& event, const QVariant& data)
 {
-    QMutexLocker locker(&m_mutex);
+    QList<Subscription> callbacks;
     
-    if (!m_subscribers.contains(event)) {
-        return;
-    }
+    {
+        QMutexLocker locker(&m_mutex);
+        if (!m_subscribers.contains(event)) {
+            return;
+        }
+        callbacks = m_subscribers[event];  // 複製名單
+    }  // 在此釋放鎖
     
-    // 發佈信號 (Qt 信號是線程安全的)
-    emit eventPublished(event, data);
-    
-    // 直接呼叫回調函數
-    for (const auto& subscription : m_subscribers[event]) {
+    // 直接呼叫回調函數 (在鎖外執行，避免死鎖)
+    for (const auto& subscription : callbacks) {
         try {
             subscription.callback(data);
         } catch (const std::exception& e) {

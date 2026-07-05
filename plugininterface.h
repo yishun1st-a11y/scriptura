@@ -26,9 +26,19 @@ class PluginContext;
  * - 依賴聲明：dependencies()
  * - 功能查詢：hasFeature()
  */
-class ScripturaPlugin
+class ScripturaPlugin : public QObject
 {
+    Q_OBJECT
 public:
+    /**
+     * @brief 建構函數
+     * @param parent 父物件
+     */
+    explicit ScripturaPlugin(QObject* parent = nullptr)
+        : QObject(parent)
+    {
+    }
+    
     /**
      * @brief 虛擬解構函數
      */

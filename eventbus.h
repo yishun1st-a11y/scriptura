@@ -85,14 +85,6 @@ public:
      */
     bool hasSubscribers(const QString& event) const;
 
-signals:
-    /**
-     * @brief 事件發佈信號
-     * @param event 事件名稱
-     * @param data 事件資料
-     */
-    void eventPublished(const QString& event, const QVariant& data);
-
 private:
     /**
      * @brief 訂閱資訊

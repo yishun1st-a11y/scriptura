@@ -6,6 +6,7 @@
 #include <QSettings>
 #include <functional>
 #include "plugininterface.h"
+#include "eventbus.h"
 
 /**
  * @file plugincontext.h
@@ -142,8 +143,16 @@ public:
      * @brief 訂閱事件
      * @param event 事件名稱
      * @param callback 事件回調函數
+     * @return 訂閱 ID，可用於取消訂閱
      */
-    void subscribe(const QString& event, std::function<void(const QVariant&)> callback);
+    EventBus::SubscriptionId subscribe(const QString& event, std::function<void(const QVariant&)> callback);
+    
+    /**
+     * @brief 取消訂閱事件
+     * @param event 事件名稱
+     * @param subscriptionId 訂閱 ID
+     */
+    void unsubscribe(const QString& event, EventBus::SubscriptionId subscriptionId);
 
 private:
     MainWindow* m_mainWindow;

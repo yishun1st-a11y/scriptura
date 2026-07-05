@@ -140,6 +140,47 @@ public:
       */
      QSet<QString> allowedPlugins() const;
 
+     // 插件啟用/停用管理
+     
+     /**
+      * @brief 停用插件（不刪除）
+      * @param id 插件 ID
+      * @return 成功返回 true
+      */
+     bool disablePlugin(const QString& id);
+     
+     /**
+      * @brief 啟用插件
+      * @param id 插件 ID
+      * @return 成功返回 true
+      */
+     bool enablePlugin(const QString& id);
+     
+     /**
+      * @brief 熱重載插件
+      * @param id 插件 ID
+      * @return 成功返回 true
+      */
+     bool reloadPlugin(const QString& id);
+     
+     /**
+      * @brief 檢查插件是否已停用
+      * @param id 插件 ID
+      * @return 已停用返回 true
+      */
+     bool isDisabled(const QString& id) const;
+     
+     /**
+      * @brief 獲取所有停用的插件 ID
+      * @return 停用的插件 ID 集合
+      */
+     QSet<QString> disabledPlugins() const;
+     
+     /**
+      * @brief 載入停用的插件列表
+      */
+     void loadDisabledPlugins();
+
      // 功能查詢
     
     /**
@@ -186,6 +227,13 @@ signals:
      * @param error 錯誤訊息
      */
     void pluginError(const QString& id, const QString& error);
+    
+    /**
+     * @brief 插件不相容信號
+     * @param id 插件 ID
+     * @param coreVersion 當前 Core 版本
+     */
+    void pluginIncompatible(const QString& id, const QString& coreVersion);
 
 private:
     /**
@@ -239,6 +287,23 @@ private:
      * @return 成功載入返回 true
      */
     bool loadPluginById(const QString& pluginId);
+    
+    /**
+     * @brief 檢查插件版本相容性
+     * @param metadata 插件元數據
+     * @return 相容返回 true
+     */
+    bool checkVersionCompatibility(const QJsonObject& metadata) const;
+
+    /**
+     * @brief 插件狀態列舉
+     */
+    enum class PluginState {
+        NotLoaded,    ///< 未載入
+        Loaded,       ///< 已載入
+        Failed,       ///< 載入失敗
+        Disabled      ///< 使用者手動停用
+    };
 
     /**
      * @brief 插件資訊結構
@@ -248,11 +313,17 @@ private:
         QJsonObject metadata;       ///< 插件元數據
         QPluginLoader* loader;        ///< Qt 插件載入器
         ScripturaPlugin* instance;    ///< 插件實例
+        PluginState state;          ///< 插件狀態
         bool initialized;           ///< 是否已初始化
         QStringList dependencies;   ///< 依賴列表
         
-        PluginInfo() : loader(nullptr), instance(nullptr), initialized(false) {}
+        PluginInfo() : loader(nullptr), instance(nullptr), state(PluginState::NotLoaded), initialized(false) {}
     };
+    
+    /**
+     * @brief 儲存停用的插件列表
+     */
+    void saveDisabledPlugins() const;
 
     /**
      * @brief 訂閱資訊
@@ -267,9 +338,12 @@ private:
     QHash<QString, QString> m_pluginPaths;                          ///< 插件ID -> 目錄路徑
     QHash<QString, QList<Subscription>> m_eventHandlers;            ///< 事件處理器
     QSet<QString> m_allowedPlugins;                                 ///< 允許載入的插件 ID
+    QSet<QString> m_disabledPlugins;                                ///< 手動停用的插件 ID
     DependencyResolver m_resolver;                                  ///< 依賴解析器
     quint64 m_nextSubscriptionId = 1;                               ///< 下一個訂閱 ID
     PluginContext* m_context = nullptr;                             ///< 插件上下文
+    
+    static const QString DISABLED_PLUGINS_FILE;                      ///< 停用插件列表檔案名稱
 };
 
 #endif // PLUGINMANAGER_H

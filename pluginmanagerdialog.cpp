@@ -13,6 +13,7 @@ PluginManagerDialog::PluginManagerDialog(PluginManager *manager, PluginContext *
     , m_detailsText(new QTextEdit(this))
     , m_installButton(new QPushButton(tr("Install Plugin..."), this))
     , m_removeButton(new QPushButton(tr("Remove Plugin"), this))
+    , m_toggleStateButton(new QPushButton(tr("Disable"), this))
     , m_refreshButton(new QPushButton(tr("Refresh"), this))
     , m_closeButton(new QPushButton(tr("Close"), this))
 {
@@ -22,6 +23,7 @@ PluginManagerDialog::PluginManagerDialog(PluginManager *manager, PluginContext *
     m_detailsText->setReadOnly(true);
     m_detailsText->setPlaceholderText(tr("Select a plugin to view details."));
     m_removeButton->setEnabled(false);
+    m_toggleStateButton->setEnabled(false);
 
     auto *mainLayout = new QHBoxLayout(this);
     auto *leftLayout = new QVBoxLayout();
@@ -33,6 +35,7 @@ PluginManagerDialog::PluginManagerDialog(PluginManager *manager, PluginContext *
 
     buttonLayout->addWidget(m_installButton);
     buttonLayout->addWidget(m_removeButton);
+    buttonLayout->addWidget(m_toggleStateButton);
     buttonLayout->addWidget(m_refreshButton);
     buttonLayout->addStretch();
     buttonLayout->addWidget(m_closeButton);
@@ -46,6 +49,7 @@ PluginManagerDialog::PluginManagerDialog(PluginManager *manager, PluginContext *
 
     connect(m_installButton, &QPushButton::clicked, this, &PluginManagerDialog::installPlugin);
     connect(m_removeButton, &QPushButton::clicked, this, &PluginManagerDialog::removeSelectedPlugin);
+    connect(m_toggleStateButton, &QPushButton::clicked, this, &PluginManagerDialog::togglePluginState);
     connect(m_refreshButton, &QPushButton::clicked, this, &PluginManagerDialog::refreshPluginList);
     connect(m_closeButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_pluginList, &QListWidget::itemSelectionChanged, this, &PluginManagerDialog::onPluginSelectionChanged);
@@ -74,11 +78,18 @@ void PluginManagerDialog::refreshPluginList()
     for (const auto &plugin : std::as_const(m_plugins)) {
         auto *item = new QListWidgetItem(plugin.name);
         item->setData(Qt::UserRole, plugin.path);
-        QString status = plugin.loaded ? tr(" (Loaded)") : tr(" (Not Loaded)");
-        item->setText(plugin.name + status);
-        if (plugin.loaded) {
+        QString status;
+        if (!plugin.enabled) {
+            status = tr(" (Disabled)");
+            item->setForeground(QBrush(QColor("#9E9E9E")));
+        } else if (plugin.loaded) {
+            status = tr(" (Loaded)");
             item->setForeground(QBrush(QColor("#4CAF50")));
+        } else {
+            status = tr(" (Not Loaded)");
+            item->setForeground(QBrush(QColor("#FF9800")));
         }
+        item->setText(plugin.name + status);
         m_pluginList->addItem(item);
     }
 }
@@ -114,6 +125,7 @@ void PluginManagerDialog::loadAvailablePlugins()
         if (pInfo.id.isEmpty()) continue;
 
         pInfo.loaded = loadedIds.contains(pInfo.id);
+        pInfo.enabled = !m_manager->isDisabled(pInfo.id);
         m_plugins.append(pInfo);
     }
 }
@@ -335,9 +347,16 @@ void PluginManagerDialog::onPluginSelectionChanged()
     int currentRow = m_pluginList->currentRow();
     if (currentRow >= 0 && currentRow < m_plugins.size()) {
         m_removeButton->setEnabled(!m_plugins[currentRow].loaded);
+        m_toggleStateButton->setEnabled(true);
+        if (m_plugins[currentRow].enabled) {
+            m_toggleStateButton->setText(tr("Disable"));
+        } else {
+            m_toggleStateButton->setText(tr("Enable"));
+        }
         showPluginDetails(m_plugins[currentRow]);
     } else {
         m_removeButton->setEnabled(false);
+        m_toggleStateButton->setEnabled(false);
         clearDetails();
     }
 }
@@ -361,6 +380,7 @@ void PluginManagerDialog::showPluginDetails(const PluginInfo &info)
     details += tr("<b>Author:</b> %1<br/>").arg(info.author);
     details += tr("<b>Library:</b> %1<br/>").arg(info.library);
     details += tr("<b>Status:</b> %1<br/>").arg(info.loaded ? tr("Loaded") : tr("Not Loaded"));
+    details += tr("<b>Enabled:</b> %1<br/>").arg(info.enabled ? tr("Yes") : tr("No"));
     details += tr("<b>Path:</b> %1<br/>").arg(info.path);
 
     if (!info.description.isEmpty()) {
@@ -388,4 +408,33 @@ void PluginManagerDialog::clearDetails()
 {
     m_detailsText->clear();
     m_detailsText->setPlaceholderText(tr("Select a plugin to view details."));
+}
+
+void PluginManagerDialog::togglePluginState()
+{
+    int currentRow = m_pluginList->currentRow();
+    if (currentRow < 0 || currentRow >= m_plugins.size()) {
+        return;
+    }
+
+    PluginInfo &plugin = m_plugins[currentRow];
+    if (!m_manager) {
+        return;
+    }
+
+    if (plugin.enabled) {
+        if (m_manager->disablePlugin(plugin.id)) {
+            plugin.enabled = false;
+            m_toggleStateButton->setText(tr("Enable"));
+            QMessageBox::information(this, tr("Plugin Disabled"), tr("Plugin '%1' has been disabled. Restart Scriptura to apply the change.").arg(plugin.name));
+        }
+    } else {
+        if (m_manager->enablePlugin(plugin.id)) {
+            plugin.enabled = true;
+            m_toggleStateButton->setText(tr("Disable"));
+            QMessageBox::information(this, tr("Plugin Enabled"), tr("Plugin '%1' has been enabled. Restart Scriptura to load it.").arg(plugin.name));
+        }
+    }
+
+    refreshPluginList();
 }

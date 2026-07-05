@@ -35,11 +35,11 @@
  * - 輸出顯示
  * - 常用操作按鈕
  */
-class GitPlugin : public QObject, public ScripturaPlugin
+class GitPlugin : public ScripturaPlugin
 {
-    Q_OBJECT
-    Q_PLUGIN_METADATA(IID "com.scriptura.plugin/1.0" FILE "git.json")
-    Q_INTERFACES(ScripturaPlugin)
+     Q_OBJECT
+     Q_PLUGIN_METADATA(IID "com.scriptura.plugin/1.0" FILE "git.json")
+     Q_INTERFACES(ScripturaPlugin)
 
 public:
     /**

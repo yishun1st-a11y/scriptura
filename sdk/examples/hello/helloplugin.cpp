@@ -4,7 +4,7 @@
 #include <QApplication>
 
 HelloPlugin::HelloPlugin(QObject* parent)
-    : QObject(parent)
+    : ScripturaPlugin(parent)
     , m_context(nullptr)
     , m_action(nullptr)
     , m_panel(nullptr)

@@ -72,7 +72,7 @@ bool DependencyResolver::hasCircularDependency(const QList<QJsonObject>& plugins
     return false;
 }
 
-QList<DependencyResolver::DependencyError> DependencyResolver::validate(const QList<QJsonObject>& plugins)
+QList<DependencyResolver::DependencyError> DependencyResolver::validate(const QList<QJsonObject>& plugins, const QSet<QString>& actuallyLoaded)
 {
     QList<DependencyError> errors;
     QSet<QString> availablePlugins;
@@ -92,12 +92,12 @@ QList<DependencyResolver::DependencyError> DependencyResolver::validate(const QL
             continue;
         }
         
-        // 檢查必需依賴
+        // 檢查必需依賴 - 使用 actuallyLoaded 而非 availablePlugins
         if (plugin.contains("dependencies")) {
             QJsonArray depArray = plugin["dependencies"].toArray();
             for (const QJsonValue& val : depArray) {
                 QString depId = val.toString();
-                if (!availablePlugins.contains(depId)) {
+                if (!actuallyLoaded.contains(depId)) {
                     errors.append(DependencyError(pluginId, depId, false));
                 }
             }

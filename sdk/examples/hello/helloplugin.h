@@ -19,11 +19,11 @@
  * @class HelloPlugin
  * @brief 最簡單的 Scriptura 插件實現
  */
-class HelloPlugin : public QObject, public ScripturaPlugin
+class HelloPlugin : public ScripturaPlugin
 {
-    Q_OBJECT
-    Q_PLUGIN_METADATA(IID "com.scriptura.plugin/1.0" FILE "plugin.json")
-    Q_INTERFACES(ScripturaPlugin)
+     Q_OBJECT
+     Q_PLUGIN_METADATA(IID "com.scriptura.plugin/1.0" FILE "plugin.json")
+     Q_INTERFACES(ScripturaPlugin)
 
 public:
     /**

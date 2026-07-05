@@ -8,7 +8,7 @@
 #include <QJsonArray>
 
 GitPlugin::GitPlugin(QObject* parent)
-    : QObject(parent)
+    : ScripturaPlugin(parent)
     , m_context(nullptr)
     , m_panel(nullptr)
     , m_outputEdit(nullptr)

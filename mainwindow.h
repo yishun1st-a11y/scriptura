@@ -129,6 +129,7 @@ private slots:
     void on_action_theme_triggered();
     void on_action_license_triggered();
     void on_action_manage_plugins_triggered();
+    void on_action_check_updates_triggered();
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
@@ -152,7 +153,8 @@ private:
         File = 0,
         ThemeSettings = 1,
         EditorSettings = 2,
-        KeyboardShortcuts = 3
+        KeyboardShortcuts = 3,
+        UpdaterSettings = 4
     };
 
     Ui::MainWindow *ui;
@@ -191,6 +193,7 @@ private:
     QWidget *themeSettingsWidget;
     QWidget *editorSettingsWidget;
     QWidget *keyboardShortcutsPageWidget;
+    QWidget *updaterSettingsWidget;
 
     QTimer *autoSaveTimer;
     QTimer *lspDebounceTimer;
@@ -221,6 +224,7 @@ private:
     QWidget* createThemeSettingsWidget();
     QWidget* createEditorSettingsWidget();
     QWidget* createKeyboardShortcutsPageWidget();
+    QWidget* createUpdaterSettingsWidget();
     void startLanguageServer(const QString &filePath);
     void startLanguageServerForProject(const QString &projectPath);
     void stopLanguageServer();

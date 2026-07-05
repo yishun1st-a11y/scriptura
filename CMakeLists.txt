@@ -2,6 +2,20 @@ cmake_minimum_required(VERSION 3.16)
 
 project(scriptura LANGUAGES CXX)
 
+# 版本號從 GitHub Release tag 注入，開發時預設為 0.0.0-dev
+if(DEFINED ENV{GITHUB_REF})
+    string(REGEX MATCH "refs/tags/v([0-9.]+)" _ $ENV{GITHUB_REF})
+    set(SCRIPTURA_VERSION "${CMAKE_MATCH_1}")
+else()
+    set(SCRIPTURA_VERSION "0.0.0-dev")
+endif()
+
+# 產生 version.h
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/version.h"
+)
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -66,6 +80,8 @@ set(SCRIPTURA_CORE_SOURCES
         pluginupdater.cpp
         plugincrashhandler.h
         plugincrashhandler.cpp
+        versionfetcher.h
+        versionfetcher.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -94,7 +110,10 @@ set_target_properties(scriptura_core PROPERTIES
 )
 
 target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
-target_include_directories(scriptura_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(scriptura_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 target_link_libraries(scriptura PRIVATE scriptura_core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 

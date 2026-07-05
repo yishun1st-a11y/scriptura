@@ -11,6 +11,7 @@
 #include "pluginmanager.h"
 #include "plugincontext.h"
 #include "pluginmanagerdialog.h"
+#include "version.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -112,10 +113,12 @@ MainWindow::MainWindow(QWidget *parent)
     themeSettingsWidget = createThemeSettingsWidget();
     editorSettingsWidget = createEditorSettingsWidget();
     keyboardShortcutsPageWidget = createKeyboardShortcutsPageWidget();
+    updaterSettingsWidget = createUpdaterSettingsWidget();
 
     editorStack->addWidget(themeSettingsWidget);
     editorStack->addWidget(editorSettingsWidget);
     editorStack->addWidget(keyboardShortcutsPageWidget);
+    editorStack->addWidget(updaterSettingsWidget);
 
     // Add settings tabs to tabBar
     int themeSettingsTabIndex = tabBar->addTab(tr("Theme"));
@@ -129,6 +132,10 @@ MainWindow::MainWindow(QWidget *parent)
     int keyboardShortcutsTabIndex = tabBar->addTab(tr("Keys"));
     tabBar->setTabData(keyboardShortcutsTabIndex, static_cast<int>(TabType::KeyboardShortcuts));
     tabBar->setTabButton(keyboardShortcutsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(keyboardShortcutsTabIndex));
+
+    int updaterSettingsTabIndex = tabBar->addTab(tr("Updates"));
+    tabBar->setTabData(updaterSettingsTabIndex, static_cast<int>(TabType::UpdaterSettings));
+    tabBar->setTabButton(updaterSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(updaterSettingsTabIndex));
 
     bottomPanelStack->addWidget(problemPanel);
     bottomPanelStack->addWidget(gitPanel);
@@ -791,6 +798,87 @@ QWidget* MainWindow::createKeyboardShortcutsPageWidget()
     return widget;
 }
 
+QWidget* MainWindow::createUpdaterSettingsWidget()
+{
+    QWidget *widget = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(widget);
+    layout->setSpacing(16);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QLabel *titleLabel = new QLabel(tr("<b>Application Updates</b>"), widget);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    QFont titleFont = titleLabel->font();
+    titleFont.setPointSize(16);
+    titleFont.setBold(true);
+    titleLabel->setFont(titleFont);
+    layout->addWidget(titleLabel);
+
+    QLabel *descriptionLabel = new QLabel(tr(
+        "Check for Scriptura updates from GitHub Releases.<br>"
+        "You can check for the latest stable release or the latest pre-release."
+    ), widget);
+    descriptionLabel->setWordWrap(true);
+    layout->addWidget(descriptionLabel);
+
+    QGroupBox *checkGroup = new QGroupBox(tr("Check for Updates"), widget);
+    QVBoxLayout *checkLayout = new QVBoxLayout(checkGroup);
+
+    QPushButton *checkStableButton = new QPushButton(tr("Check for Latest Release (Recommended)"), checkGroup);
+    QPushButton *checkPreReleaseButton = new QPushButton(tr("Check for Latest Pre-release"), checkGroup);
+    checkPreReleaseButton->setToolTip(tr("Pre-releases may be unstable. Update at your own risk."));
+
+    checkLayout->addWidget(checkStableButton);
+    checkLayout->addWidget(checkPreReleaseButton);
+
+    layout->addWidget(checkGroup);
+
+    QGroupBox *infoGroup = new QGroupBox(tr("Current Version"), widget);
+    QVBoxLayout *infoLayout = new QVBoxLayout(infoGroup);
+
+    QLabel *versionLabel = new QLabel(tr("Version: %1").arg(SCRIPTURA_VERSION), infoGroup);
+    infoLayout->addWidget(versionLabel);
+
+    layout->addWidget(infoGroup);
+    layout->addStretch();
+
+    // Connect buttons
+    connect(checkStableButton, &QPushButton::clicked, this, [this]() {
+        updater->checkForUpdates(Updater::Stable);
+    });
+    connect(checkPreReleaseButton, &QPushButton::clicked, this, [this]() {
+        // Show warning for pre-release
+        QMessageBox::StandardButton reply = QMessageBox::warning(
+            this,
+            tr("Pre-release Warning"),
+            tr("Pre-releases may be unstable and contain bugs.\n"
+               "They are intended for testing new features before the stable release.\n\n"
+               "Do you want to continue?"),
+            QMessageBox::Yes | QMessageBox::No
+        );
+        if (reply == QMessageBox::Yes) {
+            updater->checkForUpdates(Updater::PreRelease);
+        }
+    });
+
+    return widget;
+}
+
+void MainWindow::on_action_check_updates_triggered()
+{
+    // Show updater settings tab
+    for (int i = 0; i < tabBar->count(); ++i) {
+        if (static_cast<TabType>(tabBar->tabData(i).toInt()) == TabType::UpdaterSettings) {
+            tabBar->setCurrentIndex(i);
+            return;
+        }
+    }
+    // If updater tab doesn't exist yet, add it
+    int updaterSettingsTabIndex = tabBar->addTab(tr("Updates"));
+    tabBar->setTabData(updaterSettingsTabIndex, static_cast<int>(TabType::UpdaterSettings));
+    tabBar->setTabButton(updaterSettingsTabIndex, QTabBar::RightSide, createSettingsTabCloseButton(updaterSettingsTabIndex));
+    tabBar->setCurrentIndex(updaterSettingsTabIndex);
+}
+
 void MainWindow::showWelcomeScreen()
 {
     editorStack->setCurrentWidget(welcomeWidget);
@@ -1376,6 +1464,9 @@ void MainWindow::onTopTabChanged(int index)
                 break;
             case TabType::KeyboardShortcuts:
                 editorStack->setCurrentWidget(keyboardShortcutsPageWidget);
+                break;
+            case TabType::UpdaterSettings:
+                editorStack->setCurrentWidget(updaterSettingsWidget);
                 break;
         }
     } else if (data.typeId() == QMetaType::QString) {

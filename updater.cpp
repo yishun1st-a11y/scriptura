@@ -2,6 +2,7 @@
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QSettings>
 #include <QDebug>
 #include <QTimerEvent>
@@ -12,6 +13,7 @@ Updater::Updater(QObject *parent)
     , m_timer(new QTimer(this))
     , m_updateCheckEnabled(true)
     , m_updateCheckInterval(7) // Check weekly by default
+    , m_lastCheckedType(Stable)
 {
     connect(m_networkManager, &QNetworkAccessManager::finished,
             this, &Updater::onNetworkReply);
@@ -22,7 +24,7 @@ Updater::Updater(QObject *parent)
     m_updateCheckInterval = settings.value("updater/checkInterval", 7).toInt();
 
     // Setup periodic check
-    connect(m_timer, &QTimer::timeout, this, &Updater::checkForUpdates);
+    connect(m_timer, &QTimer::timeout, this, [this]() { checkForUpdates(Stable); });
     m_timer->start(m_updateCheckInterval * 24 * 60 * 60 * 1000); // Convert days to milliseconds
 }
 
@@ -36,11 +38,15 @@ Updater::~Updater()
 
 void Updater::checkForUpdates()
 {
-    if (!m_updateCheckEnabled)
-        return;
+    checkForUpdates(Stable);
+}
+
+void Updater::checkForUpdates(ReleaseType type)
+{
+    m_lastCheckedType = type;
 
     QNetworkRequest request;
-    request.setUrl(QUrl(getGitHubApiUrl()));
+    request.setUrl(QUrl(getGitHubApiUrl(type)));
     request.setHeader(QNetworkRequest::UserAgentHeader, "Scriptura-Updater");
 
     m_networkManager->get(request);
@@ -72,13 +78,22 @@ QString Updater::downloadUrl() const
     return m_downloadUrl;
 }
 
+Updater::ReleaseType Updater::lastCheckedType() const
+{
+    return m_lastCheckedType;
+}
+
 QString Updater::getLatestReleaseUrl() const
 {
     return "https://github.com/jasonblanchard/scriptura/releases/latest";
 }
 
-QString Updater::getGitHubApiUrl() const
+QString Updater::getGitHubApiUrl(ReleaseType type) const
 {
+    if (type == PreRelease) {
+        // Fetch all releases and filter for pre-releases
+        return "https://api.github.com/repos/jasonblanchard/scriptura/releases?per_page=10";
+    }
     return "https://api.github.com/repos/jasonblanchard/scriptura/releases/latest";
 }
 
@@ -103,14 +118,45 @@ void Updater::onNetworkReply(QNetworkReply *reply)
         return;
     }
 
-    if (!doc.isObject()) {
-        emit updateCheckFailed("Invalid response format");
-        return;
-    }
+    if (m_lastCheckedType == PreRelease) {
+        // For pre-release, the response is an array of releases
+        if (!doc.isArray()) {
+            emit updateCheckFailed("Invalid response format for pre-release");
+            return;
+        }
 
-    QJsonObject obj = doc.object();
-    m_latestVersion = obj["tag_name"].toString();
-    m_downloadUrl = obj["html_url"].toString();
+        QJsonArray releases = doc.array();
+        if (releases.isEmpty()) {
+            emit noUpdateAvailable();
+            return;
+        }
+
+        // Find the first pre-release
+        for (const QJsonValue &value : releases) {
+            if (!value.isObject()) continue;
+            QJsonObject obj = value.toObject();
+            if (obj.value("prerelease").toBool()) {
+                m_latestVersion = obj.value("tag_name").toString();
+                m_downloadUrl = obj.value("html_url").toString();
+                break;
+            }
+        }
+
+        if (m_latestVersion.isEmpty()) {
+            emit noUpdateAvailable();
+            return;
+        }
+    } else {
+        // For stable release, the response is a single object
+        if (!doc.isObject()) {
+            emit updateCheckFailed("Invalid response format");
+            return;
+        }
+
+        QJsonObject obj = doc.object();
+        m_latestVersion = obj["tag_name"].toString();
+        m_downloadUrl = obj["html_url"].toString();
+    }
 
     // Get current version from settings (or use a default)
     QSettings settings;

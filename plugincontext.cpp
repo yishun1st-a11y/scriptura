@@ -74,8 +74,8 @@ QObject* PluginContext::getPlugin(const QString& id) const
     if (manager) {
         ScripturaPlugin* plugin = manager->getPlugin(id);
         if (plugin) {
-            // 假設插件實例本身就是 QObject 子類
-            return dynamic_cast<QObject*>(plugin);
+            // ScripturaPlugin 現在繼承 QObject，可以直接轉換
+            return qobject_cast<QObject*>(plugin);
         }
     }
     return nullptr;
@@ -86,9 +86,30 @@ void PluginContext::notify(const QString& event, const QVariant& data)
     EventBus::instance()->publish(event, data);
 }
 
-void PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback)
+EventBus::SubscriptionId PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback)
 {
     // 訂閱事件並儲存訂閱 ID
     EventBus::SubscriptionId id = EventBus::instance()->subscribe(event, callback);
     m_eventHandlers[event].append({id, callback});
+    return id;
+}
+
+void PluginContext::unsubscribe(const QString& event, EventBus::SubscriptionId subscriptionId)
+{
+    // 從 EventBus 取消訂閱
+    EventBus::instance()->unsubscribe(event, subscriptionId);
+    
+    // 從本地記錄中移除
+    auto& subscriptions = m_eventHandlers[event];
+    for (auto it = subscriptions.begin(); it != subscriptions.end(); ++it) {
+        if (it->id == subscriptionId) {
+            subscriptions.erase(it);
+            break;
+        }
+    }
+    
+    // 如果沒有訂閱者了，移除該事件
+    if (subscriptions.isEmpty()) {
+        m_eventHandlers.remove(event);
+    }
 }

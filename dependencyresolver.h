@@ -44,9 +44,10 @@ public:
     /**
      * @brief 驗證插件依賴
      * @param plugins 插件元數據列表
+     * @param actuallyLoaded 實際載入成功的插件 ID 集合
      * @return 依賴錯誤列表
      */
-    QList<DependencyError> validate(const QList<QJsonObject>& plugins);
+    QList<DependencyError> validate(const QList<QJsonObject>& plugins, const QSet<QString>& actuallyLoaded);
     
     /**
      * @brief 計算拓撲排序結果

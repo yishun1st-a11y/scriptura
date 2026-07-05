@@ -321,9 +321,10 @@
       <addaction name="action_about"/>
       <addaction name="separator"/>
       <addaction name="action_editor_settings"/>
-     <addaction name="action_theme"/>
-     <addaction name="action_license"/>
-    </widget>
+      <addaction name="action_theme"/>
+      <addaction name="action_license"/>
+      <addaction name="action_check_updates"/>
+     </widget>
     <widget class="QMenu" name="menu_plugins">
      <property name="title">
       <string>&amp;Plugins</string>
@@ -457,12 +458,17 @@
      <string>&amp;Theme</string>
     </property>
    </action>
-   <action name="action_manage_plugins">
-    <property name="text">
-     <string>&amp;Manage Plugins...</string>
-    </property>
-   </action>
-  </widget>
+    <action name="action_manage_plugins">
+     <property name="text">
+      <string>&amp;Manage Plugins...</string>
+     </property>
+    </action>
+    <action name="action_check_updates">
+     <property name="text">
+      <string>Check for &amp;Updates...</string>
+     </property>
+    </action>
+   </widget>
  <resources/>
  <connections/>
 </ui>
