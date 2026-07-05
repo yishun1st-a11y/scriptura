@@ -334,4 +334,3 @@ void TestPluginSystem::testPluginCrashHandler_recentCrashes()
     QVERIFY(crashes.isEmpty());
 }
 
-#include "test_pluginsystem.moc"

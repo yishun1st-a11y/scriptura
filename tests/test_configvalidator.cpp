@@ -60,4 +60,3 @@ void TestConfigValidator::testGetValidatedValue()
     QCOMPARE(defaultTabWidth, 4);
 }
 
-#include "test_configvalidator.moc"
