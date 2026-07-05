@@ -87,7 +87,7 @@ set_target_properties(scriptura_core PROPERTIES
     FOLDER "Internal"
 )
 
-target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 target_include_directories(scriptura_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(scriptura PRIVATE scriptura_core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
