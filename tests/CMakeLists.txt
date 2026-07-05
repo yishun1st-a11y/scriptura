@@ -57,3 +57,6 @@ target_link_libraries(scriptura_tests PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt$
 
 # Include the parent directory for headers
 target_include_directories(scriptura_tests PRIVATE ${CMAKE_SOURCE_DIR})
+
+# Register the test with CTest
+add_test(NAME scriptura_tests COMMAND scriptura_tests)

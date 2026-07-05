@@ -9,6 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+enable_testing()
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Network)
 
@@ -60,6 +62,8 @@ set(PLUGIN_SYSTEM_SOURCES
         pluginupdater.cpp
         plugincrashhandler.h
         plugincrashhandler.cpp
+        pluginmanagerdialog.h
+        pluginmanagerdialog.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -101,6 +105,7 @@ set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/scriptura/plugins")
 set(PLUGIN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/plugins")
 
 set_target_properties(scriptura PROPERTIES
+    ENABLE_EXPORTS ON
     QT_PLUGIN_PATH "${PLUGIN_OUTPUT_DIR}"
 )
 
