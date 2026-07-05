@@ -9,24 +9,32 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Test Core Network
 set(TEST_SOURCES
     main.cpp
     test_configvalidator.cpp
-    ${CMAKE_SOURCE_DIR}/configvalidator.cpp
     test_pluginsystem.cpp
 )
 
-if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(scriptura_tests
-        ${TEST_SOURCES}
-    )
-else()
-    add_executable(scriptura_tests
-        ${TEST_SOURCES}
-    )
-endif()
+# Manually moc only the test class headers. Disable AUTOMOC for this target
+# so it does not re-generate moc for shared plugin/system headers that are
+# already moc'd inside scriptura_core, which would cause duplicate symbols.
+set(CMAKE_AUTOMOC OFF)
 
-target_link_libraries(scriptura_tests PRIVATE scriptura_core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
+qt_wrap_cpp(TEST_MOC_SOURCES
+    test_pluginsystem.h
+    test_configvalidator.h
+)
 
-# Include the parent directory for headers
+add_executable(scriptura_tests
+    ${TEST_SOURCES}
+    ${TEST_MOC_SOURCES}
+)
+
+target_link_libraries(scriptura_tests PRIVATE
+    scriptura_core
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Test
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
 target_include_directories(scriptura_tests PRIVATE ${CMAKE_SOURCE_DIR})
 
-# Register the test with CTest
 add_test(NAME scriptura_tests COMMAND scriptura_tests)

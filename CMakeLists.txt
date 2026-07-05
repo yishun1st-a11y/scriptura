@@ -45,6 +45,8 @@ set(SCRIPTURA_CORE_SOURCES
         updater.h
         configvalidator.cpp
         configvalidator.h
+        permission.cpp
+        permission.h
         pluginmanagerdialog.cpp
         pluginmanagerdialog.h
         # Plugin System
