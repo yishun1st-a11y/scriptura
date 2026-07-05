@@ -18,6 +18,10 @@ set(TS_FILES scriptura_en_001.ts)
 
 set(PROJECT_SOURCES
         main.cpp
+)
+
+set(SCRIPTURA_CORE_SOURCES
+        # UI / Core sources used by both the app and plugins via PluginContext
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
@@ -41,9 +45,9 @@ set(PROJECT_SOURCES
         updater.h
         configvalidator.cpp
         configvalidator.h
-)
-
-set(PLUGIN_SYSTEM_SOURCES
+        pluginmanagerdialog.cpp
+        pluginmanagerdialog.h
+        # Plugin System
         pluginfeature.h
         plugininterface.h
         plugincontext.h
@@ -62,8 +66,6 @@ set(PLUGIN_SYSTEM_SOURCES
         pluginupdater.cpp
         plugincrashhandler.h
         plugincrashhandler.cpp
-        pluginmanagerdialog.h
-        pluginmanagerdialog.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -85,7 +87,7 @@ else()
     qt5_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES})
 endif()
 
-add_library(scriptura_core STATIC ${PLUGIN_SYSTEM_SOURCES})
+add_library(scriptura_core STATIC ${SCRIPTURA_CORE_SOURCES})
 set_target_properties(scriptura_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     FOLDER "Internal"
