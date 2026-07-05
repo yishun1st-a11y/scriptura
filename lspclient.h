@@ -65,10 +65,32 @@ public:
     void references(const QString &uri, const Position &pos);
     void rename(const QString &uri, const Position &pos, const QString &newName);
     void codeAction(const QString &uri, const Range &range);
+    void documentSymbol(const QString &uri);
+    void workspaceSymbol(const QString &query);
+    void formatting(const QString &uri, const QJsonObject &options = {});
+    void rangeFormatting(const QString &uri, const Range &range);
+    void signatureHelp(const QString &uri, const Position &pos);
+    void declaration(const QString &uri, const Position &pos);
+    void typeDefinition(const QString &uri, const Position &pos);
+    void implementation(const QString &uri, const Position &pos);
 
     // Diagnostics
     QList<Diagnostic> diagnosticsForFile(const QString &uri) const;
     void clearDiagnostics(const QString &uri);
+
+    struct SymbolInformation {
+        QString name;
+        QString kind;
+        QString containerName;
+        Range range;
+    };
+
+    struct InlayHint {
+        Position position;
+        QString label;
+        bool paddingLeft;
+        bool paddingRight;
+    };
 
 signals:
     void serverStarted();
@@ -83,6 +105,13 @@ signals:
     void referencesReceived(const QJsonArray &locations, int requestId);
     void renameWorkspaceEdit(const QJsonObject &edit, int requestId);
     void codeActionReceived(const QJsonArray &actions, int requestId);
+    void documentSymbolReceived(const QList<SymbolInformation> &symbols);
+    void workspaceSymbolReceived(const QList<SymbolInformation> &symbols);
+    void formattingReceived(const QString &uri, const QJsonArray &edits);
+    void signatureHelpReceived(const QJsonObject &help, int requestId);
+    void declarationReceived(const QJsonArray &locations, int requestId);
+    void typeDefinitionReceived(const QJsonArray &locations, int requestId);
+    void implementationReceived(const QJsonArray &locations, int requestId);
 
     void logMessage(const QString &msg);
 
@@ -135,6 +164,7 @@ public:
     QMap<QString, QList<Diagnostic>> m_diagnostics;
     QMap<int, QString> m_pendingRequests;
     QTimer *m_timeoutTimer;
+    QString m_lastFormattingUri;
 };
 
 #endif // LSPCLIENT_H

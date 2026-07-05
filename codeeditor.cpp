@@ -4,7 +4,10 @@
 #include <QColor>
 #include <QFileInfo>
 #include <QFont>
+#include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QRegularExpressionMatchIterator>
@@ -533,11 +536,23 @@ CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent)
     , lineNumberArea(new LineNumberArea(this))
     , syntaxHighlighter(new CodeHighlighter(document()))
+    , m_multiCursor(new MultiCursorManager(this))
     , m_tabWidth(4)
 {
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
-    connect(this, &CodeEditor::cursorPositionChanged, this, &CodeEditor::highlightCurrentLine);
+    connect(this, &CodeEditor::cursorPositionChanged, this, [this]() { highlightCurrentLine(); });
+    connect(m_multiCursor, &MultiCursorManager::cursorsChanged, this, [this]() {
+        m_extraCursors.clear();
+        QColor color = palette().color(QPalette::Highlight);
+        for (const QTextCursor &cursor : m_multiCursor->cursors()) {
+            QTextEdit::ExtraSelection sel;
+            sel.cursor = cursor;
+            sel.format.setBackground(QColor(color.red(), color.green(), color.blue(), 80));
+            m_extraCursors.append(sel);
+        }
+        updateAllSelections();
+    });
 
     updateLineNumberAreaWidth(0);
     highlightCurrentLine();
@@ -597,6 +612,7 @@ void CodeEditor::paintEvent(QPaintEvent *event)
 {
     QPlainTextEdit::paintEvent(event);
     drawIndentGuides(event);
+    drawInlayHints(event);
 }
 
 void CodeEditor::drawIndentGuides(QPaintEvent *event)
@@ -642,6 +658,50 @@ void CodeEditor::drawIndentGuides(QPaintEvent *event)
         block = block.next();
         top = bottom;
         bottom = top + blockBoundingRect(block).height();
+    }
+}
+
+void CodeEditor::drawInlayHints(QPaintEvent *event)
+{
+    if (m_inlayHints.isEmpty())
+        return;
+
+    QPainter painter(viewport());
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(QPen(QColor(128, 128, 128, 180), 1));
+    painter.setFont(font());
+
+    QTextBlock block = firstVisibleBlock();
+    int blockNumber = block.blockNumber();
+
+    for (const LspClient::InlayHint &hint : m_inlayHints) {
+        if (hint.position.line < blockNumber || hint.position.line >= blockNumber + blockCount()) {
+            continue;
+        }
+
+        QTextBlock hintBlock = document()->findBlockByNumber(hint.position.line);
+        if (!hintBlock.isValid())
+            continue;
+
+        QTextCursor cursor(hintBlock);
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, hint.position.character);
+
+        QRect rect = cursorRect(cursor);
+        if (!event->rect().intersects(rect))
+            continue;
+
+        QString label = hint.label;
+        if (hint.paddingLeft)
+            label.prepend(" ");
+        if (hint.paddingRight)
+            label.append(" ");
+
+        QRect textRect = rect;
+        textRect.setWidth(fontMetrics().horizontalAdvance(label));
+        textRect.setHeight(fontMetrics().height());
+
+        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
     }
 }
 
@@ -709,7 +769,61 @@ void CodeEditor::highlightCurrentLine()
             extraSelections.prepend(selection);
     }
 
+    extraSelections.append(m_extraCursors);
     setExtraSelections(extraSelections);
+}
+
+void CodeEditor::updateAllSelections()
+{
+    highlightCurrentLine();
+}
+
+void CodeEditor::mousePressEvent(QMouseEvent *event)
+{
+    if (event->modifiers() & Qt::AltModifier) {
+        QTextCursor cursor = cursorForPosition(event->pos());
+        cursor.select(QTextCursor::WordUnderCursor);
+        if (event->modifiers() & Qt::ShiftModifier) {
+            m_columnSelectionMode = true;
+        }
+        m_multiCursor->addCursor(cursor);
+    } else {
+        m_multiCursor->clear();
+        m_columnSelectionMode = false;
+        QPlainTextEdit::mousePressEvent(event);
+    }
+}
+
+void CodeEditor::keyPressEvent(QKeyEvent *event)
+{
+    if (!m_multiCursor->hasCursors()) {
+        QPlainTextEdit::keyPressEvent(event);
+        return;
+    }
+
+    if (event->key() == Qt::Key_Escape) {
+        m_multiCursor->clear();
+        m_columnSelectionMode = false;
+        updateAllSelections();
+        return;
+    }
+
+    QString text = event->text();
+    if (text.isEmpty()) {
+        QPlainTextEdit::keyPressEvent(event);
+        m_multiCursor->clear();
+        return;
+    }
+
+    QList<QTextCursor> allCursors;
+    allCursors.append(textCursor());
+    allCursors.append(m_multiCursor->cursors());
+
+    for (int i = allCursors.size() - 1; i >= 0; --i) {
+        QTextCursor c = allCursors[i];
+        c.insertText(text);
+    }
+    m_multiCursor->clear();
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
@@ -724,9 +838,23 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
 
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
-            QString number = QString::number(blockNumber + 1);
+            int line = blockNumber + 1;
+            
+            // Draw breakpoint icon if this line has a breakpoint
+            if (m_breakpointLines.contains(line)) {
+                QPainterPath path;
+                path.addEllipse(4, top + (bottom - top) / 2 - 5, 10, 10);
+                QPen pen(Qt::red);
+                pen.setWidth(2);
+                painter.setPen(pen);
+                painter.setBrush(Qt::red);
+                painter.drawPath(path);
+            }
+            
+            // Draw line number
+            QString number = QString::number(line);
             painter.setPen(palette().color(QPalette::Text));
-            painter.drawText(0, top, lineNumberArea->width(), fontMetrics().height(),
+            painter.drawText(20, top, lineNumberArea->width() - 20, fontMetrics().height(),
                             Qt::AlignRight, number);
         }
 
@@ -756,11 +884,31 @@ void CodeEditor::setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags)
     setExtraSelections(selections);
 }
 
+void CodeEditor::setInlayHints(const QList<LspClient::InlayHint> &hints)
+{
+    m_inlayHints = hints;
+    // Inlay hints will be rendered in paintEvent
+    update();
+}
+
 void CodeEditor::mouseMoveEvent(QMouseEvent *event)
 {
     m_lastMousePos = event->pos();
-    updateHoverTooltip(event->pos());
-    QPlainTextEdit::mouseMoveEvent(event);
+    if (event->modifiers() & Qt::AltModifier) {
+        QTextCursor cursor = cursorForPosition(event->pos());
+        cursor.select(QTextCursor::WordUnderCursor);
+        QTextEdit::ExtraSelection sel;
+        sel.cursor = cursor;
+        QColor color = palette().color(QPalette::Highlight);
+        sel.format.setBackground(QColor(color.red(), color.green(), color.blue(), 80));
+        if (m_extraCursors.isEmpty() || m_extraCursors.last().cursor.selectionStart() != cursor.selectionStart()) {
+            m_extraCursors.append(sel);
+            updateAllSelections();
+        }
+    } else {
+        updateHoverTooltip(event->pos());
+        QPlainTextEdit::mouseMoveEvent(event);
+    }
 }
 
 void CodeEditor::leaveEvent(QEvent *event)
@@ -795,4 +943,44 @@ void CodeEditor::updateHoverTooltip(const QPoint &pos)
         }
     }
     m_hoveringDiagnostic = false;
+}
+
+void CodeEditor::setBreakpointLine(int line, bool enabled)
+{
+    if (enabled) {
+        m_breakpointLines.insert(line);
+    } else {
+        m_breakpointLines.remove(line);
+    }
+    emit breakpointToggled(line, enabled);
+    lineNumberArea->update();
+}
+
+void CodeEditor::clearBreakpoints()
+{
+    m_breakpointLines.clear();
+    lineNumberArea->update();
+}
+
+void CodeEditor::highlightCurrentLine(int line)
+{
+    m_currentDebugLine = line;
+    
+    QTextBlock block = document()->findBlockByNumber(line - 1);
+    if (!block.isValid())
+        return;
+    
+    QTextCursor cursor(block);
+    cursor.select(QTextCursor::LineUnderCursor);
+    
+    QTextEdit::ExtraSelection selection;
+    selection.format.setBackground(QColor(255, 255, 0, 100));
+    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+    selection.cursor = cursor;
+    
+    QList<QTextEdit::ExtraSelection> extraSelections;
+    extraSelections.append(selection);
+    extraSelections.append(m_diagnosticSelections);
+    extraSelections.append(m_extraCursors);
+    setExtraSelections(extraSelections);
 }

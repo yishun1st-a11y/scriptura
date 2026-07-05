@@ -81,11 +81,19 @@ void LspClient::initialize(const QString &rootUri, const QString &languageId)
             {"definition", QJsonObject{}},
             {"references", QJsonObject{}},
             {"rename", QJsonObject{}},
-            {"codeAction", QJsonObject{}}
+            {"codeAction", QJsonObject{}},
+            {"documentSymbol", QJsonObject{}},
+            {"formatting", QJsonObject{}},
+            {"rangeFormatting", QJsonObject{}},
+            {"signatureHelp", QJsonObject{{"triggerKind", 1}}},
+            {"declaration", QJsonObject{}},
+            {"typeDefinition", QJsonObject{}},
+            {"implementation", QJsonObject{}}
         }},
         {"workspace", QJsonObject{
             {"workspaceFolders", true},
-            {"applyEdit", true}
+            {"applyEdit", true},
+            {"symbol", QJsonObject{{"query", ""}}}
         }}
     };
 
@@ -213,6 +221,99 @@ void LspClient::codeAction(const QString &uri, const Range &range)
     int id = m_requestId;
     sendRequest("textDocument/codeAction", params, id);
     m_pendingRequests[id] = "codeAction";
+    m_requestId++;
+}
+
+void LspClient::documentSymbol(const QString &uri)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    int id = m_requestId;
+    sendRequest("textDocument/documentSymbol", params, id);
+    m_pendingRequests[id] = "documentSymbol";
+    m_requestId++;
+}
+
+void LspClient::workspaceSymbol(const QString &query)
+{
+    QJsonObject params;
+    params["query"] = query;
+    int id = m_requestId;
+    sendRequest("workspace/symbol", params, id);
+    m_pendingRequests[id] = "workspaceSymbol";
+    m_requestId++;
+}
+
+void LspClient::formatting(const QString &uri, const QJsonObject &options)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["options"] = options;
+    m_lastFormattingUri = uri;
+    int id = m_requestId;
+    sendRequest("textDocument/formatting", params, id);
+    m_pendingRequests[id] = "formatting";
+    m_requestId++;
+}
+
+void LspClient::rangeFormatting(const QString &uri, const Range &range)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["range"] = QJsonObject{
+        {"start", QJsonObject{{"line", range.start.line}, {"character", range.start.character}}},
+        {"end", QJsonObject{{"line", range.end.line}, {"character", range.end.character}}}
+    };
+    params["options"] = QJsonObject{};
+    m_lastFormattingUri = uri;
+    int id = m_requestId;
+    sendRequest("textDocument/rangeFormatting", params, id);
+    m_pendingRequests[id] = "rangeFormatting";
+    m_requestId++;
+}
+
+void LspClient::signatureHelp(const QString &uri, const Position &pos)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["position"] = QJsonObject{{"line", pos.line}, {"character", pos.character}};
+    params["context"] = QJsonObject{{"triggerKind", 1}};
+    int id = m_requestId;
+    sendRequest("textDocument/signatureHelp", params, id);
+    m_pendingRequests[id] = "signatureHelp";
+    m_requestId++;
+}
+
+void LspClient::declaration(const QString &uri, const Position &pos)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["position"] = QJsonObject{{"line", pos.line}, {"character", pos.character}};
+    int id = m_requestId;
+    sendRequest("textDocument/declaration", params, id);
+    m_pendingRequests[id] = "declaration";
+    m_requestId++;
+}
+
+void LspClient::typeDefinition(const QString &uri, const Position &pos)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["position"] = QJsonObject{{"line", pos.line}, {"character", pos.character}};
+    int id = m_requestId;
+    sendRequest("textDocument/typeDefinition", params, id);
+    m_pendingRequests[id] = "typeDefinition";
+    m_requestId++;
+}
+
+void LspClient::implementation(const QString &uri, const Position &pos)
+{
+    QJsonObject params;
+    params["textDocument"] = QJsonObject{{"uri", uri}};
+    params["position"] = QJsonObject{{"line", pos.line}, {"character", pos.character}};
+    int id = m_requestId;
+    sendRequest("textDocument/implementation", params, id);
+    m_pendingRequests[id] = "implementation";
     m_requestId++;
 }
 
@@ -349,6 +450,59 @@ void LspClient::handleResponse(const QJsonObject &obj)
     } else if (method == "codeAction") {
         QJsonArray actions = obj["result"].toArray();
         emit codeActionReceived(actions, id);
+    } else if (method == "documentSymbol") {
+        QJsonArray symbols = obj["result"].toArray();
+        QList<SymbolInformation> info;
+        for (const QJsonValue &val : symbols) {
+            QJsonObject sym = val.toObject();
+            SymbolInformation si;
+            si.name = sym["name"].toString();
+            si.kind = sym["kind"].toString();
+            si.containerName = sym["containerName"].toString();
+            if (sym.contains("range")) {
+                QJsonObject r = sym["range"].toObject();
+                si.range.start.line = r["start"].toObject()["line"].toInt();
+                si.range.start.character = r["start"].toObject()["character"].toInt();
+                si.range.end.line = r["end"].toObject()["line"].toInt();
+                si.range.end.character = r["end"].toObject()["character"].toInt();
+            }
+            info.append(si);
+        }
+        emit documentSymbolReceived(info);
+    } else if (method == "workspaceSymbol") {
+        QJsonArray symbols = obj["result"].toArray();
+        QList<SymbolInformation> info;
+        for (const QJsonValue &val : symbols) {
+            QJsonObject sym = val.toObject();
+            SymbolInformation si;
+            si.name = sym["name"].toString();
+            si.kind = sym["kind"].toString();
+            si.containerName = sym["containerName"].toString();
+            if (sym.contains("range")) {
+                QJsonObject r = sym["range"].toObject();
+                si.range.start.line = r["start"].toObject()["line"].toInt();
+                si.range.start.character = r["start"].toObject()["character"].toInt();
+                si.range.end.line = r["end"].toObject()["line"].toInt();
+                si.range.end.character = r["end"].toObject()["character"].toInt();
+            }
+            info.append(si);
+        }
+        emit workspaceSymbolReceived(info);
+    } else if (method == "signatureHelp") {
+        QJsonObject help = obj["result"].toObject();
+        emit signatureHelpReceived(help, id);
+    } else if (method == "declaration") {
+        QJsonArray locations = obj["result"].toArray();
+        emit declarationReceived(locations, id);
+    } else if (method == "typeDefinition") {
+        QJsonArray locations = obj["result"].toArray();
+        emit typeDefinitionReceived(locations, id);
+    } else if (method == "implementation") {
+        QJsonArray locations = obj["result"].toArray();
+        emit implementationReceived(locations, id);
+    } else if (method == "formatting" || method == "rangeFormatting") {
+        QJsonArray edits = obj["result"].toArray();
+        emit formattingReceived(QString(), edits);
     }
 }
 

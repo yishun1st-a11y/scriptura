@@ -50,6 +50,12 @@ set(SCRIPTURA_CORE_SOURCES
         todopanel.h
         gitpanel.cpp
         gitpanel.h
+        gitdiffwidget.cpp
+        gitdiffwidget.h
+        gitbranchwidget.cpp
+        gitbranchwidget.h
+        gitmergewidget.cpp
+        gitmergewidget.h
         terminalpanel.cpp
         terminalpanel.h
         splashscreen.h
@@ -62,6 +68,41 @@ set(SCRIPTURA_CORE_SOURCES
         permission.h
         pluginmanagerdialog.cpp
         pluginmanagerdialog.h
+        findreplace.cpp
+        findreplace.h
+        projectsearch.cpp
+        projectsearch.h
+        commandpalette.cpp
+        commandpalette.h
+        # Debugger
+        dapclient.cpp
+        dapclient.h
+        debugpanel.cpp
+        debugpanel.h
+        debugconfiguration.cpp
+        debugconfiguration.h
+        rundialog.cpp
+        rundialog.h
+        # Milestone 1 - Multi-cursor & Column Selection
+        multi-cursor.cpp
+        multi-cursor.h
+        columnselection.cpp
+        columnselection.h
+        # Milestone 4 - Debugger Gutter
+        debuggergutter.cpp
+        debuggergutter.h
+        # Milestone 5 - Workspace & Productivity
+        workspace.cpp
+        workspace.h
+        taskrunner.cpp
+        taskrunner.h
+        # Milestone 6 - UI/UX Polish
+        minimap.cpp
+        minimap.h
+        splitmanager.cpp
+        splitmanager.h
+        breadcrumb.cpp
+        breadcrumb.h
         # Plugin System
         pluginfeature.h
         plugininterface.h

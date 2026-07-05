@@ -36,6 +36,27 @@
 #include "configvalidator.h"
 #include "pluginmanager.h"
 #include "plugincontext.h"
+#include "findreplace.h"
+#include "projectsearch.h"
+#include "commandpalette.h"
+#include "dapclient.h"
+#include "debugpanel.h"
+#include "debugconfiguration.h"
+#include "rundialog.h"
+#include "workspace.h"
+#include "taskrunner.h"
+#include "minimap.h"
+#include "splitmanager.h"
+#include "breadcrumb.h"
+
+class DapClient;
+class DebugPanel;
+class Workspace;
+class TaskRunner;
+
+class FindReplaceBar;
+class ProjectSearchPanel;
+class CommandPalette;
 
 enum class ThemeColorFamily {
     Default = 0,
@@ -124,24 +145,36 @@ private slots:
     void on_action_clone_window_triggered();
     void on_action_git_commit_triggered();
     void on_action_git_push_triggered();
+    void on_action_git_pull_triggered();
+    void on_action_git_fetch_triggered();
     void on_action_about_triggered();
     void on_action_editor_settings_triggered();
     void on_action_theme_triggered();
     void on_action_license_triggered();
     void on_action_manage_plugins_triggered();
     void on_action_check_updates_triggered();
+    void on_action_format_document_triggered();
+    void on_action_go_to_definition_triggered();
+    void on_action_show_document_symbols_triggered();
     void on_fileTreeView_clicked(const QModelIndex &index);
     void on_tabWidget_tabCloseRequested(int index);
     void goUpClicked();
     void on_action_open_file_triggered();
-    void onSearchTextChanged(const QString &text);
-    void onSearchNext();
-    void onSearchPrev();
     void showSearchBar(bool show);
-    void performSearch(const QString &text, bool forward);
+    void on_action_find_triggered();
+    void on_action_replace_triggered();
+    void on_action_project_search_triggered();
+    void on_action_command_palette_triggered();
     void showKeyboardShortcuts();
     void onEditorTextChanged();
     void on_placeholderButton_clicked(bool checked);
+    void on_action_run_debug_triggered();
+    void on_action_stop_debug_triggered();
+    void on_action_step_over_triggered();
+    void on_action_step_into_triggered();
+    void on_action_step_out_triggered();
+    void on_action_continue_debug_triggered();
+    void on_action_toggle_breakpoint_triggered();
 
     void toggleSidebar();
     void onBottomTabChanged(int index);
@@ -175,11 +208,9 @@ private:
     QTabBar *tabBar;
     QTabBar *bottomPanelTabs;
     QStackedWidget *bottomPanelStack;
-    QLineEdit   *searchLineEdit;
-    QPushButton *searchPrevBtn;
-    QPushButton *searchNextBtn;
-    QLabel      *searchCountLabel;
-    QWidget     *searchBarWidget;
+    FindReplaceBar *findReplaceBar;
+    ProjectSearchPanel *projectSearchPanel;
+    CommandPalette *commandPalette;
     QWidget     *welcomeWidget;
     QVBoxLayout *recentProjectsLayout;
     QStackedWidget *editorStack;
@@ -207,6 +238,22 @@ private:
     PluginContext *pluginContext;
     PluginManagerDialog *pluginManagerDialog;
     int m_previousEditorStackIndex;
+    
+    // Debugger
+    DapClient *dapClient;
+    DebugPanel *debugPanel;
+    DebugConfigurationManager *debugConfigManager;
+    bool m_isDebugging;
+
+    // Workspace & Productivity
+    Workspace *m_workspace;
+    QStringList recentFiles;
+    void openRecentFile(const QString &path);
+
+    // UI/UX Polish
+    Minimap *m_minimap;
+    SplitManager *m_splitManager;
+    Breadcrumb *m_breadcrumb;
 
     void updateCursorPosition();
     void updateStatusBar();
@@ -246,6 +293,19 @@ private:
     void updateRecentProjectsOnWelcome();
     void autoSave();
     bool checkUnsavedChanges();
+    
+    // Debugger methods
+    void startDebug(const QString &configName);
+    void stopDebug();
+    void loadDebugConfigurations();
+    void onBreakpointToggled(int line, bool enabled);
+    void onDapInitialized();
+    void onDapStopped(const QString &reason);
+    void onDapContinued();
+    void onStackTraceReceived(int threadId, const QList<DapClient::StackFrame> &frames);
+    void onScopesReceived(int frameId, const QList<DapClient::Scope> &scopes);
+    void onVariablesReceived(int variablesReference, const QList<DapClient::Variable> &variables);
+    void onDapLogMessage(const QString &msg);
 
     QPalette buildBasePalette(ThemeColorFamily family, ThemeMode mode);
     QColor highContrastAccentColor(ThemeColorFamily family, ThemeMode mode);

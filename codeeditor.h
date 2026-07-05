@@ -13,6 +13,9 @@
 #include <QWidget>
 #include <QColor>
 #include <QEvent>
+#include <QSet>
+#include "multi-cursor.h"
+#include "lspclient.h"
 
 class CodeHighlighter : public QSyntaxHighlighter
 {
@@ -93,12 +96,20 @@ public:
     void setTabWidth(int spaces);
     int tabWidth() const;
     void setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags);
+    void setInlayHints(const QList<LspClient::InlayHint> &hints);
+
+    void setBreakpointLine(int line, bool enabled);
+    QSet<int> breakpointLines() const { return m_breakpointLines; }
+    void clearBreakpoints();
+    void highlightCurrentLine(int line);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void changeEvent(QEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void leaveEvent(QEvent *event) override;
     bool event(QEvent *event) override;
 
@@ -107,19 +118,30 @@ private slots:
     void updateLineNumberArea(const QRect &rect, int dy);
     void highlightCurrentLine();
 
+signals:
+    void breakpointToggled(int line, bool enabled);
+
 private:
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
     void drawIndentGuides(QPaintEvent *event);
+    void drawInlayHints(QPaintEvent *event);
     void updateHoverTooltip(const QPoint &pos);
+    void updateAllSelections();
 
     QWidget *lineNumberArea;
     CodeHighlighter *syntaxHighlighter;
+    MultiCursorManager *m_multiCursor;
     bool m_showIndentGuides = true;
     int m_tabWidth = 4;
     QList<QTextEdit::ExtraSelection> m_diagnosticSelections;
+    QList<QTextEdit::ExtraSelection> m_extraCursors;
+    QList<LspClient::InlayHint> m_inlayHints;
     QPoint m_lastMousePos;
     bool m_hoveringDiagnostic = false;
+    bool m_columnSelectionMode = false;
+    QSet<int> m_breakpointLines;
+    int m_currentDebugLine = -1;
 };
 
 class LineNumberArea : public QWidget

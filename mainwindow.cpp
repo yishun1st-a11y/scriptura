@@ -12,6 +12,13 @@
 #include "plugincontext.h"
 #include "pluginmanagerdialog.h"
 #include "version.h"
+#include "findreplace.h"
+#include "projectsearch.h"
+#include "commandpalette.h"
+#include "dapclient.h"
+#include "debugpanel.h"
+#include "debugconfiguration.h"
+#include "rundialog.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -66,6 +73,14 @@ MainWindow::MainWindow(QWidget *parent)
     , pluginContext(new PluginContext(this, this))
     , pluginManagerDialog(new PluginManagerDialog(pluginManager, pluginContext, this))
     , m_previousEditorStackIndex(0)
+    , dapClient(new DapClient(this))
+    , debugPanel(new DebugPanel(this))
+    , debugConfigManager(new DebugConfigurationManager())
+    , m_isDebugging(false)
+    , m_workspace(new Workspace(this))
+    , m_minimap(nullptr)
+    , m_splitManager(new SplitManager(this))
+    , m_breadcrumb(nullptr)
 {
     ui->setupUi(this);
 
@@ -142,6 +157,10 @@ MainWindow::MainWindow(QWidget *parent)
     problemPanel->hide();
     gitPanel->hide();
 
+    // Create panels that need to be added to bottom stack
+    projectSearchPanel = new ProjectSearchPanel(this);
+    debugPanel = new DebugPanel(this);
+
     // Top toolbar setup
     sidebarToggleButton = new QToolButton(ui->topToolbar);
     sidebarToggleButton->setText(tr("\u2261"));
@@ -158,37 +177,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->topToolbarLayout->addSpacing(8);
 
-    searchBarWidget = new QWidget(ui->topToolbar);
-    searchBarWidget->setVisible(false);
-    QHBoxLayout *searchLayout = new QHBoxLayout(searchBarWidget);
-    searchLayout->setContentsMargins(2, 2, 2, 2);
-    searchLayout->setSpacing(4);
+    findReplaceBar = new FindReplaceBar(ui->topToolbar);
+    findReplaceBar->setVisible(false);
+    ui->topToolbarLayout->addWidget(findReplaceBar, 1);
 
-    searchLineEdit = new QLineEdit(searchBarWidget);
-    searchLineEdit->setPlaceholderText(tr("Search in file..."));
-    searchLineEdit->setClearButtonEnabled(true);
-    connect(searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
-    connect(searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::onSearchNext);
-    searchLayout->addWidget(searchLineEdit, 1);
+    commandPalette = new CommandPalette(this);
 
-    searchPrevBtn = new QPushButton(tr("\u25B2"), searchBarWidget);
-    searchPrevBtn->setFixedSize(24, 24);
-    searchPrevBtn->setToolTip(tr("Previous match"));
-    connect(searchPrevBtn, &QPushButton::clicked, this, &MainWindow::onSearchPrev);
-    searchLayout->addWidget(searchPrevBtn);
-
-    searchNextBtn = new QPushButton(tr("\u25BC"), searchBarWidget);
-    searchNextBtn->setFixedSize(24, 24);
-    searchNextBtn->setToolTip(tr("Next match"));
-    connect(searchNextBtn, &QPushButton::clicked, this, &MainWindow::onSearchNext);
-    searchLayout->addWidget(searchNextBtn);
-
-    searchCountLabel = new QLabel(searchBarWidget);
-    searchCountLabel->setFixedWidth(48);
-    searchCountLabel->setAlignment(Qt::AlignCenter);
-    searchLayout->addWidget(searchCountLabel);
-
-    ui->topToolbarLayout->addWidget(searchBarWidget, 1);
+    // Add remaining panels to bottom stack
+    bottomPanelStack->addWidget(projectSearchPanel);
+    bottomPanelStack->addWidget(debugPanel);
+    projectSearchPanel->hide();
+    debugPanel->hide();
 
     // Right-side toolbar buttons
     themeButton = new QToolButton(ui->topToolbar);
@@ -248,6 +247,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Bottom panel tabs
     bottomPanelTabs->addTab(tr("Problems"));
     bottomPanelTabs->addTab(tr("Git"));
+    bottomPanelTabs->addTab(tr("Search Results"));
+    bottomPanelTabs->addTab(tr("Debug"));
     connect(bottomPanelTabs, &QTabBar::currentChanged, this, &MainWindow::onBottomTabChanged);
 
     // Sidebar connections
@@ -290,8 +291,8 @@ MainWindow::MainWindow(QWidget *parent)
         } else {
             ui->bottomPanelContainer->hide();
             gitPanel->hide();
-        }
-    });
+         }
+     });
 
     // Theme and settings buttons
     connect(themeButton, &QToolButton::clicked, this, &MainWindow::on_action_theme_triggered);
@@ -302,11 +303,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Tab close requests
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::on_tabWidget_tabCloseRequested);
-
-    bottomPanelStack->addWidget(problemPanel);
-    bottomPanelStack->addWidget(gitPanel);
-    problemPanel->hide();
-    gitPanel->hide();
 
     editorStack->addWidget(welcomeWidget);
     editorStack->addWidget(ui->tabWidget);
@@ -325,6 +321,107 @@ MainWindow::MainWindow(QWidget *parent)
     QShortcut *shortcutDialog = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(shortcutDialog, &QShortcut::activated, this, &MainWindow::showKeyboardShortcuts);
 
+    QShortcut *shortcutFind = new QShortcut(QKeySequence("Ctrl+F"), this);
+    connect(shortcutFind, &QShortcut::activated, this, &MainWindow::on_action_find_triggered);
+
+    QShortcut *shortcutReplace = new QShortcut(QKeySequence("Ctrl+H"), this);
+    connect(shortcutReplace, &QShortcut::activated, this, &MainWindow::on_action_replace_triggered);
+
+    QShortcut *shortcutFindNext = new QShortcut(QKeySequence("Ctrl+G"), this);
+    connect(shortcutFindNext, &QShortcut::activated, this, [this]() { if (findReplaceBar) findReplaceBar->findNext(); });
+
+    QShortcut *shortcutFindPrev = new QShortcut(QKeySequence("Ctrl+Shift+G"), this);
+    connect(shortcutFindPrev, &QShortcut::activated, this, [this]() { if (findReplaceBar) findReplaceBar->findPrev(); });
+
+    QShortcut *shortcutProjectSearch = new QShortcut(QKeySequence("Ctrl+Shift+F"), this);
+    connect(shortcutProjectSearch, &QShortcut::activated, this, &MainWindow::on_action_project_search_triggered);
+
+    QShortcut *shortcutCommandPalette = new QShortcut(QKeySequence("Ctrl+Shift+P"), this);
+    connect(shortcutCommandPalette, &QShortcut::activated, this, &MainWindow::on_action_command_palette_triggered);
+
+    QShortcut *shortcutFormat = new QShortcut(QKeySequence("Ctrl+Shift+I"), this);
+    connect(shortcutFormat, &QShortcut::activated, this, &MainWindow::on_action_format_document_triggered);
+
+    QShortcut *shortcutDefinition = new QShortcut(QKeySequence("F12"), this);
+    connect(shortcutDefinition, &QShortcut::activated, this, &MainWindow::on_action_go_to_definition_triggered);
+
+    // Debug shortcuts
+    QShortcut *shortcutRunDebug = new QShortcut(QKeySequence("F5"), this);
+    connect(shortcutRunDebug, &QShortcut::activated, this, &MainWindow::on_action_run_debug_triggered);
+
+    QShortcut *shortcutStopDebug = new QShortcut(QKeySequence("Shift+F5"), this);
+    connect(shortcutStopDebug, &QShortcut::activated, this, &MainWindow::on_action_stop_debug_triggered);
+
+    QShortcut *shortcutStepOver = new QShortcut(QKeySequence("F10"), this);
+    connect(shortcutStepOver, &QShortcut::activated, this, &MainWindow::on_action_step_over_triggered);
+
+    QShortcut *shortcutStepInto = new QShortcut(QKeySequence("F11"), this);
+    connect(shortcutStepInto, &QShortcut::activated, this, &MainWindow::on_action_step_into_triggered);
+
+    QShortcut *shortcutStepOut = new QShortcut(QKeySequence("Shift+F11"), this);
+    connect(shortcutStepOut, &QShortcut::activated, this, &MainWindow::on_action_step_out_triggered);
+
+    QShortcut *shortcutContinue = new QShortcut(QKeySequence("Ctrl+F5"), this);
+    connect(shortcutContinue, &QShortcut::activated, this, &MainWindow::on_action_continue_debug_triggered);
+
+    QShortcut *shortcutToggleBreakpoint = new QShortcut(QKeySequence("F9"), this);
+    connect(shortcutToggleBreakpoint, &QShortcut::activated, this, &MainWindow::on_action_toggle_breakpoint_triggered);
+
+    QMenu *searchMenu = ui->menubar->addMenu(tr("&Search"));
+    QAction *actionFind = searchMenu->addAction(tr("&Find..."));
+    connect(actionFind, &QAction::triggered, this, &MainWindow::on_action_find_triggered);
+    QAction *actionReplace = searchMenu->addAction(tr("&Replace..."));
+    connect(actionReplace, &QAction::triggered, this, &MainWindow::on_action_replace_triggered);
+    searchMenu->addSeparator();
+    QAction *actionProjectSearch = searchMenu->addAction(tr("Search in &Project..."));
+    connect(actionProjectSearch, &QAction::triggered, this, &MainWindow::on_action_project_search_triggered);
+    QAction *actionCommandPalette = searchMenu->addAction(tr("&Command Palette..."));
+    connect(actionCommandPalette, &QAction::triggered, this, &MainWindow::on_action_command_palette_triggered);
+
+    QMenu *lspMenu = ui->menubar->addMenu(tr("&Code"));
+    QAction *actionFormat = lspMenu->addAction(tr("&Format Document"));
+    connect(actionFormat, &QAction::triggered, this, &MainWindow::on_action_format_document_triggered);
+    QAction *actionSymbols = lspMenu->addAction(tr("Show &Symbols..."));
+    connect(actionSymbols, &QAction::triggered, this, &MainWindow::on_action_show_document_symbols_triggered);
+    QAction *actionDefinition = lspMenu->addAction(tr("Go to &Definition"));
+    connect(actionDefinition, &QAction::triggered, this, &MainWindow::on_action_go_to_definition_triggered);
+
+    // Debug menu
+    QMenu *debugMenu = ui->menubar->addMenu(tr("&Debug"));
+    QAction *actionRunDebug = debugMenu->addAction(tr("Run / &Debug..."));
+    actionRunDebug->setShortcut(QKeySequence("F5"));
+    connect(actionRunDebug, &QAction::triggered, this, &MainWindow::on_action_run_debug_triggered);
+    QAction *actionStopDebug = debugMenu->addAction(tr("Stop &Debugging"));
+    actionStopDebug->setShortcut(QKeySequence("Shift+F5"));
+    connect(actionStopDebug, &QAction::triggered, this, &MainWindow::on_action_stop_debug_triggered);
+    debugMenu->addSeparator();
+    QAction *actionToggleBreakpoint = debugMenu->addAction(tr("Toggle &Breakpoint"));
+    actionToggleBreakpoint->setShortcut(QKeySequence("F9"));
+    connect(actionToggleBreakpoint, &QAction::triggered, this, &MainWindow::on_action_toggle_breakpoint_triggered);
+    debugMenu->addSeparator();
+    QAction *actionContinue = debugMenu->addAction(tr("&Continue"));
+    actionContinue->setShortcut(QKeySequence("Ctrl+F5"));
+    connect(actionContinue, &QAction::triggered, this, &MainWindow::on_action_continue_debug_triggered);
+    QAction *actionStepOver = debugMenu->addAction(tr("Step &Over"));
+    actionStepOver->setShortcut(QKeySequence("F10"));
+    connect(actionStepOver, &QAction::triggered, this, &MainWindow::on_action_step_over_triggered);
+    QAction *actionStepInto = debugMenu->addAction(tr("Step &Into"));
+    actionStepInto->setShortcut(QKeySequence("F11"));
+    connect(actionStepInto, &QAction::triggered, this, &MainWindow::on_action_step_into_triggered);
+    QAction *actionStepOut = debugMenu->addAction(tr("Step &Out"));
+    actionStepOut->setShortcut(QKeySequence("Shift+F11"));
+    connect(actionStepOut, &QAction::triggered, this, &MainWindow::on_action_step_out_triggered);
+
+    connect(findReplaceBar, &FindReplaceBar::replaceAllComplete, this, [](int count) {
+        qDebug() << "Replace all complete:" << count;
+    });
+
+    connect(projectSearchPanel, &ProjectSearchPanel::resultActivated, this, [this](const QString &filePath, int line, int column) {
+        QModelIndex index = fileModel->index(filePath);
+        if (index.isValid())
+            on_fileTreeView_clicked(index);
+    });
+
     // LSP connections
     connect(lspClient, &LspClient::diagnosticsReceived, this, &MainWindow::onDiagnosticsReceived);
     connect(lspClient, &LspClient::serverStarted, this, []() {
@@ -335,6 +432,19 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(lspClient, &LspClient::logMessage, this, [](const QString &msg) {
         qDebug() << "LSP:" << msg;
+    });
+
+    // DAP connections
+    debugPanel->setClient(dapClient);
+    connect(dapClient, &DapClient::initialized, this, &MainWindow::onDapInitialized);
+    connect(dapClient, &DapClient::stopped, this, &MainWindow::onDapStopped);
+    connect(dapClient, &DapClient::continued, this, &MainWindow::onDapContinued);
+    connect(dapClient, &DapClient::stackTraceReceived, this, &MainWindow::onStackTraceReceived);
+    connect(dapClient, &DapClient::scopesReceived, this, &MainWindow::onScopesReceived);
+    connect(dapClient, &DapClient::variablesReceived, this, &MainWindow::onVariablesReceived);
+    connect(dapClient, &DapClient::logMessage, this, &MainWindow::onDapLogMessage);
+    connect(dapClient, &DapClient::serverFailed, this, [](const QString &err) {
+        qDebug() << "DAP server failed:" << err;
     });
 
     // Problem panel connections
@@ -463,6 +573,9 @@ QWidget* MainWindow::createKeyboardShortcutsWidget()
         "Ctrl+Z: Undo &nbsp;&nbsp; "
         "Ctrl+Y: Redo &nbsp;&nbsp; "
         "Ctrl+F: Find &nbsp;&nbsp; "
+        "Ctrl+H: Replace &nbsp;&nbsp; "
+        "Ctrl+G: Find Next &nbsp;&nbsp; "
+        "Ctrl+Shift+P: Command Palette &nbsp;&nbsp; "
         "Ctrl+K: Keyboard Shortcuts"
     ), widget);
     shortcutsLabel->setAlignment(Qt::AlignCenter);
@@ -781,8 +894,11 @@ QWidget* MainWindow::createKeyboardShortcutsPageWidget()
         "Ctrl+V: Paste<br><br>"
         "<b>View/Navigation:</b><br>"
         "Ctrl+F: Find &nbsp;&nbsp; "
-        "F3: Find Next &nbsp;&nbsp; "
-        "Shift+F3: Find Previous &nbsp;&nbsp; "
+        "Ctrl+H: Replace &nbsp;&nbsp; "
+        "Ctrl+G: Find Next &nbsp;&nbsp; "
+        "Ctrl+Shift+G: Find Previous &nbsp;&nbsp; "
+        "Ctrl+Shift+F: Project Search &nbsp;&nbsp; "
+        "Ctrl+Shift+P: Command Palette &nbsp;&nbsp; "
         "Ctrl+K: Keyboard Shortcuts<br><br>"
         "<b>Project:</b><br>"
         "Ctrl+E: Project Settings &nbsp;&nbsp; "
@@ -883,7 +999,7 @@ void MainWindow::showWelcomeScreen()
 {
     editorStack->setCurrentWidget(welcomeWidget);
     tabBar->hide();
-    searchBarWidget->setVisible(false);
+    findReplaceBar->setVisible(false);
 }
 
 void MainWindow::showEditorInterface()
@@ -1082,6 +1198,7 @@ void MainWindow::on_action_open_file_triggered()
 
     CodeEditor *editor = new CodeEditor(this);
     editor->setLanguageForFile(fileName);
+    connect(editor, &CodeEditor::breakpointToggled, this, &MainWindow::onBreakpointToggled);
     QSettings settings;
     QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
     editor->setFont(savedFont);
@@ -1089,6 +1206,26 @@ void MainWindow::on_action_open_file_triggered()
     int w = settings.value("editor/width", 0).toInt();
     if (w > 0) editor->setMinimumWidth(w);
     editor->setPlainText(content);
+
+    // Create minimap for this editor
+    Minimap *minimap = new Minimap(editor, this);
+    minimap->setDocument(editor->document());
+    connect(minimap, &Minimap::viewportRequested, editor, [editor](int position) {
+        QTextCursor cursor(editor->document());
+        cursor.movePosition(QTextCursor::Start);
+        cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, position);
+        editor->setTextCursor(cursor);
+        editor->centerCursor();
+    });
+
+    // Create breadcrumb for this editor
+    Breadcrumb *breadcrumb = new Breadcrumb(editor, this);
+    breadcrumb->setFilePath(fileName);
+    connect(breadcrumb, &Breadcrumb::breadcrumbClicked, this, [this](const QString &path) {
+        // Handle breadcrumb navigation
+    });
+    connect(editor, &QPlainTextEdit::cursorPositionChanged, breadcrumb, &Breadcrumb::updateFromCursor);
+
     int tabIndex = openFiles.size();
     connect(editor, &QPlainTextEdit::modificationChanged, this,
             [this, tabIndex](bool m) { updateTabModified(tabIndex, m); });
@@ -1254,6 +1391,7 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         
         CodeEditor *editor = new CodeEditor(this);
         editor->setLanguageForFile(path);
+        connect(editor, &CodeEditor::breakpointToggled, this, &MainWindow::onBreakpointToggled);
         QSettings settings;
         QFont savedFont = settings.value("editor/font", editor->font()).value<QFont>();
         editor->setFont(savedFont);
@@ -1263,6 +1401,26 @@ void MainWindow::on_fileTreeView_clicked(const QModelIndex &index)
         if (savedEditorWidth > 0)
             editor->setMinimumWidth(savedEditorWidth);
         editor->setPlainText(content);
+
+        // Create minimap for this editor
+        Minimap *minimap = new Minimap(editor, this);
+        minimap->setDocument(editor->document());
+        connect(minimap, &Minimap::viewportRequested, editor, [editor](int position) {
+            QTextCursor cursor(editor->document());
+            cursor.movePosition(QTextCursor::Start);
+            cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, position);
+            editor->setTextCursor(cursor);
+            editor->centerCursor();
+        });
+
+        // Create breadcrumb for this editor
+        Breadcrumb *breadcrumb = new Breadcrumb(editor, this);
+        breadcrumb->setFilePath(path);
+        connect(breadcrumb, &Breadcrumb::breadcrumbClicked, this, [this](const QString &path) {
+            // Handle breadcrumb navigation
+        });
+        connect(editor, &QPlainTextEdit::cursorPositionChanged, breadcrumb, &Breadcrumb::updateFromCursor);
+
         int tabIndex = openFiles.size();
         connect(editor, &QPlainTextEdit::cursorPositionChanged, this, &MainWindow::updateCursorPosition);
         connect(editor, &QPlainTextEdit::modificationChanged, this,
@@ -1530,13 +1688,21 @@ void MainWindow::onBottomTabChanged(int index)
     if (index == 0) {
         problemPanel->show();
         gitPanel->hide();
+        projectSearchPanel->hide();
         problemsButton->setChecked(true);
         gitButton->setChecked(false);
     } else if (index == 1) {
         problemPanel->hide();
         gitPanel->show();
+        projectSearchPanel->hide();
         problemsButton->setChecked(false);
         gitButton->setChecked(true);
+    } else if (index == 2) {
+        problemPanel->hide();
+        gitPanel->hide();
+        projectSearchPanel->show();
+        problemsButton->setChecked(false);
+        gitButton->setChecked(false);
     }
 }
 
@@ -2041,169 +2207,13 @@ void MainWindow::on_action_license_triggered()
 
 void MainWindow::showSearchBar(bool show)
 {
-    searchBarWidget->setVisible(show);
+    findReplaceBar->setVisible(show);
     if (show) {
-        searchLineEdit->clear();
-        searchCountLabel->clear();
+        findReplaceBar->setEditor(qobject_cast<QPlainTextEdit*>(ui->tabWidget->currentWidget()));
     }
     CodeEditor *editor = getCurrentCodeEditor();
     if (editor)
         editor->setExtraSelections(QList<QTextEdit::ExtraSelection>());
-}
-
-void MainWindow::performSearch(const QString &text, bool forward)
-{
-    CodeEditor *editor = getCurrentCodeEditor();
-    if (!editor)
-        return;
-
-    QList<QTextEdit::ExtraSelection> selections;
-    if (text.isEmpty()) {
-        editor->setExtraSelections(selections);
-        searchCountLabel->clear();
-        searchLineEdit->setFocus();
-        return;
-    }
-
-    QTextDocument *doc = editor->document();
-    QTextCursor cursor(doc);
-    cursor.movePosition(QTextCursor::Start);
-    QTextDocument::FindFlags flags = forward ? QTextDocument::FindFlags() : QTextDocument::FindFlags(QTextDocument::FindBackward);
-
-    int matchIndex = 0;
-    int activeIndex = 0;
-    QTextCursor activeCursor;
-
-    if (!editor->extraSelections().isEmpty()) {
-        activeCursor = editor->textCursor();
-        activeIndex = editor->extraSelections().first().cursor.positionInBlock();
-    }
-
-    while (!cursor.isNull()) {
-        cursor = doc->find(text, cursor, flags);
-        if (cursor.isNull())
-            break;
-
-        QTextEdit::ExtraSelection sel;
-    if (matchIndex == activeIndex) {
-        sel.cursor = cursor;
-        sel.cursor.select(QTextCursor::WordUnderCursor);
-        QColor highlightColor = palette().color(QPalette::Highlight);
-        sel.format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
-        sel.format.setForeground(palette().color(QPalette::HighlightedText));
-        activeCursor = cursor;
-    } else {
-        sel.cursor = cursor;
-        sel.cursor.select(QTextCursor::WordUnderCursor);
-        QColor highlightColor = palette().color(QPalette::Highlight);
-        sel.format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
-    }
-        selections.append(sel);
-        matchIndex++;
-    }
-
-    if (selections.isEmpty()) {
-        editor->setExtraSelections(selections);
-        searchCountLabel->setText("0/0");
-        searchLineEdit->setFocus();
-        return;
-    }
-
-    if (activeIndex >= selections.size())
-        activeIndex = 0;
-
-    if (activeIndex < selections.size()) {
-        QColor highlightColor = palette().color(QPalette::Highlight);
-        selections[activeIndex].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
-        selections[activeIndex].format.setForeground(palette().color(QPalette::HighlightedText));
-        selections[activeIndex].cursor.clearSelection();
-    }
-
-    editor->setExtraSelections(selections);
-    editor->setTextCursor(selections[activeIndex].cursor);
-    editor->centerCursor();
-
-    searchCountLabel->setText(QString("%1/%2").arg(activeIndex + 1).arg(selections.size()));
-}
-
-void MainWindow::onSearchTextChanged(const QString &text)
-{
-    searchCountLabel->clear();
-    performSearch(text, true);
-}
-
-void MainWindow::onSearchNext()
-{
-    CodeEditor *editor = getCurrentCodeEditor();
-    if (!editor || editor->extraSelections().isEmpty())
-        return;
-
-    const QList<QTextEdit::ExtraSelection> &selections = editor->extraSelections();
-    int current = 0;
-    QTextCursor tc = editor->textCursor();
-    int pos = tc.position();
-    for (int i = 0; i < selections.size(); ++i) {
-        if (selections[i].cursor.selectionStart() >= pos) {
-            current = i;
-            break;
-        }
-        current = (i + 1) % selections.size();
-    }
-    current = (current + 1) % selections.size();
-
-    QList<QTextEdit::ExtraSelection> newSel = selections;
-    QColor highlightColor = palette().color(QPalette::Highlight);
-    newSel[current].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
-    newSel[current].format.setForeground(palette().color(QPalette::HighlightedText));
-    newSel[current].cursor.clearSelection();
-
-    for (int i = 0; i < newSel.size(); ++i) {
-        if (i != current) {
-            QColor highlightColor = palette().color(QPalette::Highlight);
-            newSel[i].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
-        }
-    }
-
-    editor->setExtraSelections(newSel);
-    editor->setTextCursor(newSel[current].cursor);
-    editor->centerCursor();
-    searchCountLabel->setText(QString("%1/%2").arg(current + 1).arg(selections.size()));
-}
-
-void MainWindow::onSearchPrev()
-{
-    CodeEditor *editor = getCurrentCodeEditor();
-    if (!editor || editor->extraSelections().isEmpty())
-        return;
-
-    const QList<QTextEdit::ExtraSelection> &selections = editor->extraSelections();
-    int current = 0;
-    QTextCursor tc = editor->textCursor();
-    int pos = tc.position();
-    for (int i = 0; i < selections.size(); ++i) {
-        if (selections[i].cursor.selectionStart() <= pos) {
-            current = i;
-        }
-    }
-    current = (current - 1 + selections.size()) % selections.size();
-
-    QList<QTextEdit::ExtraSelection> newSel = selections;
-    QColor highlightColor = palette().color(QPalette::Highlight);
-    newSel[current].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 200));
-    newSel[current].format.setForeground(palette().color(QPalette::HighlightedText));
-    newSel[current].cursor.clearSelection();
-
-    for (int i = 0; i < newSel.size(); ++i) {
-        if (i != current) {
-            QColor highlightColor = palette().color(QPalette::Highlight);
-            newSel[i].format.setBackground(QColor(highlightColor.red(), highlightColor.green(), highlightColor.blue(), 70));
-        }
-    }
-
-    editor->setExtraSelections(newSel);
-    editor->setTextCursor(newSel[current].cursor);
-    editor->centerCursor();
-    searchCountLabel->setText(QString("%1/%2").arg(current + 1).arg(selections.size()));
 }
 
 QString MainWindow::findTerminal()
@@ -3161,4 +3171,362 @@ void MainWindow::onUpdateCheckFailed(const QString &error)
 {
     qDebug() << "Update check failed:" << error;
     // Silent fail - don't show error to user for background update check
+}
+
+void MainWindow::on_action_git_pull_triggered()
+{
+    if (QStandardPaths::findExecutable("git").isEmpty()) {
+        QMessageBox::warning(this, tr("Error"), tr("Git is not installed or not in PATH."));
+        return;
+    }
+    QProcess gitProcess(this);
+    gitProcess.setWorkingDirectory(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
+    gitProcess.start("git", {"pull"});
+    if (gitProcess.waitForFinished(30000)) {
+        QString output = QString::fromLocal8Bit(gitProcess.readAllStandardOutput());
+        QString error = QString::fromLocal8Bit(gitProcess.readAllStandardError());
+        gitPanel->setOutput(output + error);
+    } else {
+        gitPanel->setOutput(tr("Failed to run git pull. The operation may have timed out."));
+    }
+}
+
+void MainWindow::on_action_git_fetch_triggered()
+{
+    if (QStandardPaths::findExecutable("git").isEmpty()) {
+        QMessageBox::warning(this, tr("Error"), tr("Git is not installed or not in PATH."));
+        return;
+    }
+    QProcess gitProcess(this);
+    gitProcess.setWorkingDirectory(projectDir.isEmpty() ? QDir::currentPath() : projectDir);
+    gitProcess.start("git", {"fetch"});
+    if (gitProcess.waitForFinished(30000)) {
+        QString output = QString::fromLocal8Bit(gitProcess.readAllStandardOutput());
+        QString error = QString::fromLocal8Bit(gitProcess.readAllStandardError());
+        gitPanel->setOutput(output + error);
+    } else {
+        gitPanel->setOutput(tr("Failed to run git fetch. The operation may have timed out."));
+    }
+}
+
+void MainWindow::on_action_find_triggered()
+{
+    showEditorInterface();
+    showSearchBar(true);
+    findReplaceBar->setReplaceVisible(false);
+    findReplaceBar->setEditor(getCurrentCodeEditor());
+    findReplaceBar->findNext();
+}
+
+void MainWindow::on_action_replace_triggered()
+{
+    showEditorInterface();
+    showSearchBar(true);
+    findReplaceBar->setReplaceVisible(true);
+    findReplaceBar->setEditor(getCurrentCodeEditor());
+    findReplaceBar->findNext();
+}
+
+void MainWindow::on_action_project_search_triggered()
+{
+    QString root = projectDir.isEmpty() ? QDir::homePath() : projectDir;
+    findReplaceBar->setVisible(false);
+    bottomPanelTabs->setCurrentIndex(2);
+    bottomPanelStack->setCurrentIndex(2);
+    projectSearchPanel->show();
+    ui->bottomPanelContainer->show();
+    projectSearchPanel->search(QString(), root);
+}
+
+void MainWindow::on_action_command_palette_triggered()
+{
+    if (!commandPalette) return;
+    commandPalette->registerCommand({"open-project", tr("Open Project..."), "Ctrl+Shift+O", [this]() { on_action_open_project_triggered(); }});
+    commandPalette->registerCommand({"open-file", tr("Open File..."), "Ctrl+O", [this]() { on_action_open_file_triggered(); }});
+    commandPalette->registerCommand({"save", tr("Save"), "Ctrl+S", [this]() { on_action_save_triggered(); }});
+    commandPalette->registerCommand({"save-as", tr("Save As..."), "Ctrl+Shift+S", [this]() { on_action_save_as_triggered(); }});
+    commandPalette->registerCommand({"new-file", tr("New File..."), "Ctrl+N", [this]() { on_action_add_file_directory_triggered(); }});
+    commandPalette->registerCommand({"undo", tr("Undo"), "Ctrl+Z", [this]() { on_action_Undo_triggered(); }});
+    commandPalette->registerCommand({"redo", tr("Redo"), "Ctrl+Y", [this]() { on_action_Redo_triggered(); }});
+    commandPalette->registerCommand({"cut", tr("Cut"), "Ctrl+X", [this]() { on_actionCu_t_triggered(); }});
+    commandPalette->registerCommand({"copy", tr("Copy"), "Ctrl+C", [this]() { on_action_copy_triggered(); }});
+    commandPalette->registerCommand({"paste", tr("Paste"), "Ctrl+V", [this]() { on_action_Paste_triggered(); }});
+    commandPalette->registerCommand({"find", tr("Find in File"), "Ctrl+F", [this]() { on_action_find_triggered(); }});
+    commandPalette->registerCommand({"replace", tr("Find and Replace"), "Ctrl+H", [this]() { on_action_replace_triggered(); }});
+    commandPalette->registerCommand({"project-search", tr("Project Search"), "Ctrl+Shift+F", [this]() { on_action_project_search_triggered(); }});
+    commandPalette->registerCommand({"git-commit", tr("Git Commit..."), "", [this]() { on_action_git_commit_triggered(); }});
+    commandPalette->registerCommand({"git-push", tr("Git Push..."), "", [this]() { on_action_git_push_triggered(); }});
+    commandPalette->registerCommand({"theme", tr("Theme"), "Ctrl+T", [this]() { on_action_theme_triggered(); }});
+    commandPalette->registerCommand({"editor-settings", tr("Editor Settings"), "", [this]() { on_action_editor_settings_triggered(); }});
+    commandPalette->registerCommand({"shortcuts", tr("Keyboard Shortcuts"), "Ctrl+K", [this]() { showKeyboardShortcuts(); }});
+    commandPalette->registerCommand({"updates", tr("Check for Updates..."), "", [this]() { on_action_check_updates_triggered(); }});
+    commandPalette->registerCommand({"plugins", tr("Manage Plugins..."), "", [this]() { on_action_manage_plugins_triggered(); }});
+    commandPalette->execute();
+}
+
+void MainWindow::on_action_format_document_triggered()
+{
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (!editor || currentFile.isEmpty())
+        return;
+    QString uri = QUrl::fromLocalFile(currentFile).toString();
+    lspClient->formatting(uri);
+    qDebug() << "Formatting requested for" << currentFile;
+}
+
+void MainWindow::on_action_go_to_definition_triggered()
+{
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (!editor || currentFile.isEmpty())
+        return;
+    QString uri = QUrl::fromLocalFile(currentFile).toString();
+    QTextCursor cursor = editor->textCursor();
+    LspClient::Position pos;
+    pos.line = cursor.blockNumber();
+    pos.character = cursor.positionInBlock();
+    lspClient->definition(uri, pos);
+    qDebug() << "Go to definition requested for" << currentFile;
+}
+
+void MainWindow::on_action_show_document_symbols_triggered()
+{
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (!editor || currentFile.isEmpty())
+        return;
+    QString uri = QUrl::fromLocalFile(currentFile).toString();
+    lspClient->documentSymbol(uri);
+    qDebug() << "Document symbols requested for" << currentFile;
+}
+
+// Debug methods
+void MainWindow::on_action_run_debug_triggered()
+{
+    loadDebugConfigurations();
+    
+    RunDialog dialog(this);
+    dialog.setConfigurations(debugConfigManager->configurations());
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        QString configName = dialog.selectedConfiguration().name;
+        QString mode = dialog.selectedMode();
+        
+        if (mode == "debug") {
+            startDebug(configName);
+        } else {
+            // Run without debugging - could be implemented later
+            QMessageBox::information(this, tr("Run"), tr("Run without debugging is not yet implemented."));
+        }
+    }
+}
+
+void MainWindow::on_action_stop_debug_triggered()
+{
+    if (m_isDebugging) {
+        stopDebug();
+    }
+}
+
+void MainWindow::on_action_step_over_triggered()
+{
+    if (m_isDebugging && dapClient->isRunning()) {
+        dapClient->next();
+    }
+}
+
+void MainWindow::on_action_step_into_triggered()
+{
+    if (m_isDebugging && dapClient->isRunning()) {
+        dapClient->stepIn();
+    }
+}
+
+void MainWindow::on_action_step_out_triggered()
+{
+    if (m_isDebugging && dapClient->isRunning()) {
+        dapClient->stepOut();
+    }
+}
+
+void MainWindow::on_action_continue_debug_triggered()
+{
+    if (m_isDebugging && dapClient->isRunning()) {
+        dapClient->continueDebug();
+    }
+}
+
+void MainWindow::on_action_toggle_breakpoint_triggered()
+{
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (!editor)
+        return;
+    
+    QTextCursor cursor = editor->textCursor();
+    int line = cursor.blockNumber() + 1;
+    
+    bool enabled = editor->breakpointLines().contains(line);
+    editor->setBreakpointLine(line, !enabled);
+    
+    // If debugging, update breakpoints in DAP
+    if (m_isDebugging && dapClient->isRunning()) {
+        dapClient->setBreakpoints(currentFile, editor->breakpointLines().values());
+    }
+}
+
+void MainWindow::startDebug(const QString &configName)
+{
+    DebugConfiguration config = debugConfigManager->configuration(configName);
+    if (config.name.isEmpty()) {
+        QMessageBox::warning(this, tr("Error"), tr("Debug configuration not found: %1").arg(configName));
+        return;
+    }
+    
+    // Start the debugger adapter (e.g., lldb, gdb, or a DAP server)
+    QString debuggerPath = config.debuggerPath;
+    if (debuggerPath.isEmpty()) {
+        QMessageBox::warning(this, tr("Error"), tr("No debugger path specified in configuration."));
+        return;
+    }
+    
+    if (!dapClient->startServer(debuggerPath, QStringList())) {
+        QMessageBox::warning(this, tr("Error"), tr("Failed to start debugger adapter."));
+        return;
+    }
+    
+    // Initialize DAP
+    dapClient->initialize(config.program, config.args, config.cwd);
+    
+    m_isDebugging = true;
+    
+    // Show debug panel
+    ui->bottomPanelContainer->show();
+    bottomPanelTabs->setCurrentIndex(3);
+    bottomPanelStack->setCurrentIndex(3);
+    debugPanel->show();
+}
+
+void MainWindow::stopDebug()
+{
+    if (dapClient->isRunning()) {
+        dapClient->disconnect();
+        dapClient->stopServer();
+    }
+    
+    m_isDebugging = false;
+    
+    // Clear debug highlights
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (editor) {
+        editor->clearBreakpoints();
+    }
+    
+    debugPanel->hide();
+    ui->bottomPanelContainer->hide();
+}
+
+void MainWindow::loadDebugConfigurations()
+{
+    QString configPath = projectDir + "/.vscode/launch.json";
+    if (QFile::exists(configPath)) {
+        debugConfigManager->loadFromFile(configPath);
+    } else {
+        // Create a default configuration
+        DebugConfiguration defaultConfig;
+        defaultConfig.name = "Default";
+        defaultConfig.type = "cppdbg";
+        defaultConfig.request = "launch";
+        defaultConfig.program = "";
+        defaultConfig.args = QStringList();
+        defaultConfig.cwd = projectDir;
+        debugConfigManager->addConfiguration(defaultConfig);
+    }
+}
+
+void MainWindow::onBreakpointToggled(int line, bool enabled)
+{
+    Q_UNUSED(line)
+    Q_UNUSED(enabled)
+    // Breakpoint toggled in editor - handled in on_action_toggle_breakpoint_triggered
+}
+
+void MainWindow::onDapInitialized()
+{
+    qDebug() << "DAP initialized";
+    // Send breakpoints after initialization
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (editor && !currentFile.isEmpty()) {
+        dapClient->setBreakpoints(currentFile, editor->breakpointLines().values());
+    }
+    
+    // Launch the program
+    dapClient->launch();
+}
+
+void MainWindow::onDapStopped(const QString &reason)
+{
+    qDebug() << "DAP stopped:" << reason;
+    
+    // Request stack trace
+    dapClient->stackTrace(1);
+    
+    // Show debug panel if not visible
+    if (!debugPanel->isVisible()) {
+        ui->bottomPanelContainer->show();
+        bottomPanelTabs->setCurrentIndex(3);
+        bottomPanelStack->setCurrentIndex(3);
+        debugPanel->show();
+    }
+}
+
+void MainWindow::onDapContinued()
+{
+    qDebug() << "DAP continued";
+    // Clear current line highlight
+    CodeEditor *editor = getCurrentCodeEditor();
+    if (editor) {
+        editor->highlightCurrentLine(-1);
+    }
+}
+
+void MainWindow::onStackTraceReceived(int threadId, const QList<DapClient::StackFrame> &frames)
+{
+    Q_UNUSED(threadId)
+    qDebug() << "Stack trace received with" << frames.size() << "frames";
+    
+    debugPanel->setStack(frames);
+    
+    // Highlight the current line from the top frame
+    if (!frames.isEmpty()) {
+        CodeEditor *editor = getCurrentCodeEditor();
+        if (editor && frames[0].source.path == currentFile) {
+            editor->highlightCurrentLine(frames[0].line);
+        }
+        
+        // Request scopes for the top frame
+        dapClient->scopes(frames[0].id);
+    }
+}
+
+void MainWindow::onScopesReceived(int frameId, const QList<DapClient::Scope> &scopes)
+{
+    Q_UNUSED(frameId)
+    qDebug() << "Scopes received:" << scopes.size();
+    
+    // Request variables for each scope
+    for (const DapClient::Scope &scope : scopes) {
+        if (scope.variablesReference > 0) {
+            dapClient->variables(scope.variablesReference);
+        }
+    }
+}
+
+void MainWindow::onVariablesReceived(int variablesReference, const QList<DapClient::Variable> &variables)
+{
+    Q_UNUSED(variablesReference)
+    qDebug() << "Variables received:" << variables.size();
+    // Update variables tree in debug panel
+}
+
+void MainWindow::onDapLogMessage(const QString &msg)
+{
+    qDebug() << "DAP:" << msg;
 }
