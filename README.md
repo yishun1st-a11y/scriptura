@@ -22,7 +22,7 @@ A simple Qt-based text editor with project file browsing.
 - **Delete files/directories**: Remove files or directories from the project
 - **Save As**: Save files with a different name
 - **Theme support**: Multiple light/dark themes available
-- **Plugin Manager**: Install, remove, and manage plugins via the GUI (**Plugins → Manage Plugins...**). Manual plugin installation is not supported.
+- **Plugin Manager**: Install, remove, and manage plugins via the GUI (**Plugins → Manage Plugins...**).
 - **Plugin system**: Extensible architecture with event bus, service locator, and settings support
 - **Built-in Git plugin**: Version control integration for commits and pushes
 
