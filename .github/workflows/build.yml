@@ -65,5 +65,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scriptura-windows
-          path: build/scriptura.exe
+          path: build/Release/scriptura.exe
           retention-days: 14
