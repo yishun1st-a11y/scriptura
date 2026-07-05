@@ -30,6 +30,7 @@ set(TS_FILES scriptura_en_001.ts)
 
 set(PROJECT_SOURCES
         main.cpp
+        resources.qrc
 )
 
 set(SCRIPTURA_CORE_SOURCES
