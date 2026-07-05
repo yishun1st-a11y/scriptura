@@ -74,7 +74,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
 # For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 
-    qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    qt_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES})
 else()
     if(ANDROID)
         add_library(scriptura SHARED
@@ -88,7 +88,7 @@ else()
         )
     endif()
 
-    qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
+    qt5_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES})
 endif()
 
 target_link_libraries(scriptura PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
