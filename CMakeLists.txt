@@ -39,7 +39,9 @@ set(PROJECT_SOURCES
         updater.h
         configvalidator.cpp
         configvalidator.h
-        # Plugin System
+)
+
+set(PLUGIN_SYSTEM_SOURCES
         pluginfeature.h
         plugininterface.h
         plugincontext.h
@@ -58,10 +60,6 @@ set(PROJECT_SOURCES
         pluginupdater.cpp
         plugincrashhandler.h
         plugincrashhandler.cpp
-        pluginmanagerdialog.h
-        pluginmanagerdialog.cpp
-        permission.h
-        permission.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -69,19 +67,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET scriptura APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
-
-    qt_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES})
 else()
     if(ANDROID)
         add_library(scriptura SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(scriptura
             ${PROJECT_SOURCES}
@@ -91,7 +81,16 @@ else()
     qt5_create_translation(QM_FILES ${PROJECT_SOURCES} ${TS_FILES})
 endif()
 
-target_link_libraries(scriptura PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+add_library(scriptura_core STATIC ${PLUGIN_SYSTEM_SOURCES})
+set_target_properties(scriptura_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    FOLDER "Internal"
+)
+
+target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets)
+target_include_directories(scriptura_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(scriptura PRIVATE scriptura_core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 
 if(WIN32)
     set_target_properties(scriptura PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
