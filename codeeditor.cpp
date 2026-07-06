@@ -613,6 +613,7 @@ void CodeEditor::paintEvent(QPaintEvent *event)
     QPlainTextEdit::paintEvent(event);
     drawIndentGuides(event);
     drawInlayHints(event);
+    drawGhostText(event);
 }
 
 void CodeEditor::drawIndentGuides(QPaintEvent *event)
@@ -703,6 +704,27 @@ void CodeEditor::drawInlayHints(QPaintEvent *event)
 
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, label);
     }
+}
+
+void CodeEditor::drawGhostText(QPaintEvent *event)
+{
+    if (m_ghostText.isEmpty())
+        return;
+
+    QPainter painter(viewport());
+    painter.setFont(font());
+    painter.setPen(QPen(QColor(128, 128, 128, 140), 1));
+
+    QTextCursor cursor(textCursor());
+    cursor.clearSelection();
+    QRect rect = cursorRect(cursor);
+    if (!event->rect().intersects(rect))
+        return;
+
+    QRect textRect = rect;
+    textRect.setWidth(fontMetrics().horizontalAdvance(m_ghostText));
+    textRect.setHeight(fontMetrics().height());
+    painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, m_ghostText);
 }
 
 void CodeEditor::resizeEvent(QResizeEvent *event)
@@ -796,6 +818,33 @@ void CodeEditor::mousePressEvent(QMouseEvent *event)
 
 void CodeEditor::keyPressEvent(QKeyEvent *event)
 {
+    if (!m_ghostText.isEmpty()) {
+        if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            QString accepted = m_ghostText;
+            QTextCursor cursor(textCursor());
+            cursor.insertText(accepted);
+            m_ghostText.clear();
+            update();
+            emit ghostTextAccepted(accepted);
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_Escape) {
+            m_ghostText.clear();
+            update();
+            event->accept();
+            return;
+        }
+        if (!event->text().isEmpty() && event->text().at(0).isPrint()) {
+            QTextCursor cursor(textCursor());
+            cursor.insertText(event->text());
+            QPlainTextEdit::keyPressEvent(event);
+            m_ghostText.clear();
+            update();
+            return;
+        }
+    }
+
     if (!m_multiCursor->hasCursors()) {
         QPlainTextEdit::keyPressEvent(event);
         return;
@@ -826,12 +875,18 @@ void CodeEditor::keyPressEvent(QKeyEvent *event)
     m_multiCursor->clear();
 }
 
-void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
-{
-    QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), palette().color(QPalette::AlternateBase));
+ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
+ {
+     QPainter painter(lineNumberArea);
 
-    QTextBlock block = firstVisibleBlock();
+     QColor alternate = palette().color(QPalette::AlternateBase);
+     QColor base = palette().color(QPalette::Base);
+     QLinearGradient gradient(0, 0, lineNumberArea->width(), 0);
+     gradient.setColorAt(0, alternate);
+     gradient.setColorAt(1, base);
+     painter.fillRect(event->rect(), gradient);
+
+     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
     int top = static_cast<int>(blockBoundingGeometry(block).translated(contentOffset()).top());
     int bottom = top + static_cast<int>(blockBoundingRect(block).height());
@@ -851,11 +906,11 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
                 painter.drawPath(path);
             }
             
-            // Draw line number
-            QString number = QString::number(line);
-            painter.setPen(palette().color(QPalette::Text));
-            painter.drawText(20, top, lineNumberArea->width() - 20, fontMetrics().height(),
-                            Qt::AlignRight, number);
+             // Draw line number
+             QString number = QString::number(line);
+             painter.setPen(palette().color(QPalette::Midlight));
+             painter.drawText(20, top, lineNumberArea->width() - 20, fontMetrics().height(),
+                             Qt::AlignRight, number);
         }
 
         block = block.next();
@@ -889,6 +944,22 @@ void CodeEditor::setInlayHints(const QList<LspClient::InlayHint> &hints)
     m_inlayHints = hints;
     // Inlay hints will be rendered in paintEvent
     update();
+}
+
+void CodeEditor::setGhostText(const QString &text)
+{
+    if (m_ghostText != text) {
+        m_ghostText = text;
+        update();
+    }
+}
+
+void CodeEditor::clearGhostText()
+{
+    if (!m_ghostText.isEmpty()) {
+        m_ghostText.clear();
+        update();
+    }
 }
 
 void CodeEditor::mouseMoveEvent(QMouseEvent *event)

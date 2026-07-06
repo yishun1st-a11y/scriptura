@@ -99,13 +99,33 @@ void DapClient::configurationDone()
 
 void DapClient::setBreakpoints(const QString &sourcePath, const QList<int> &lines)
 {
-    QJsonArray bpLines;
-    for (int line : lines)
-        bpLines.append(line);
+    QList<Breakpoint> bps;
+    for (int line : lines) {
+        Breakpoint bp;
+        bp.line = line;
+        bps.append(bp);
+    }
+    setBreakpointsWithConditions(sourcePath, bps);
+}
+
+void DapClient::setBreakpointsWithConditions(const QString &sourcePath, const QList<Breakpoint> &breakpoints)
+{
+    QJsonArray bpArray;
+    for (const Breakpoint &bp : breakpoints) {
+        QJsonObject bpObj;
+        bpObj["line"] = bp.line;
+        if (!bp.condition.isEmpty())
+            bpObj["condition"] = bp.condition;
+        if (!bp.hitCondition.isEmpty())
+            bpObj["hitCondition"] = bp.hitCondition;
+        if (!bp.logMessage.isEmpty())
+            bpObj["logMessage"] = bp.logMessage;
+        bpArray.append(bpObj);
+    }
 
     QJsonObject params;
     params["source"] = QJsonObject{{"path", sourcePath}};
-    params["breakpoints"] = QJsonArray{QJsonObject{{"line", bpLines}}};
+    params["breakpoints"] = bpArray;
 
     int id = m_requestId;
     sendRequest("setBreakpoints", params, id);

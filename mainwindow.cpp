@@ -19,6 +19,11 @@
 #include "debugpanel.h"
 #include "debugconfiguration.h"
 #include "rundialog.h"
+#include "aiinlinecompletion.h"
+#include "httpclientpanel.h"
+#include "codeactionui.h"
+#include "sqliteviewer.h"
+#include "pluginregistry.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -81,6 +86,11 @@ MainWindow::MainWindow(QWidget *parent)
     , m_minimap(nullptr)
     , m_splitManager(new SplitManager(this))
     , m_breadcrumb(nullptr)
+    , m_aiInline(new AiInlineCompletion(this))
+    , m_httpClient(new HttpClientPanel(this))
+    , m_codeActionCtrl(new CodeActionController(this))
+    , m_sqliteViewer(new SqliteViewerPanel(this))
+    , m_pluginRegistry(new PluginRegistry(this))
 {
     ui->setupUi(this);
 
@@ -124,6 +134,9 @@ MainWindow::MainWindow(QWidget *parent)
     editorStack->addWidget(todoPanel);
     editorStack->addWidget(terminalPanel);
 
+    // Plugin registry - load user-configured URL
+    registryUrl = QSettings().value("plugin/registryUrl", "https://raw.githubusercontent.com/jason1015-coder/scriptura/main/plugin-registry.json").toString();
+
     // Create settings page widgets
     themeSettingsWidget = createThemeSettingsWidget();
     editorSettingsWidget = createEditorSettingsWidget();
@@ -163,14 +176,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Top toolbar setup
     sidebarToggleButton = new QToolButton(ui->topToolbar);
-    sidebarToggleButton->setText(tr("\u2261"));
+    sidebarToggleButton->setIcon(QIcon(":/icons/sidebar-toggle.svg"));
+    sidebarToggleButton->setIconSize(QSize(20, 20));
     sidebarToggleButton->setToolTip(tr("Toggle Sidebar"));
     sidebarToggleButton->setCheckable(true);
     sidebarToggleButton->setChecked(true);
     ui->topToolbarLayout->addWidget(sidebarToggleButton);
 
     goUpButton = new QToolButton(ui->topToolbar);
-    goUpButton->setText(tr("\u2191"));
+    goUpButton->setIcon(QIcon(":/icons/go-up.svg"));
+    goUpButton->setIconSize(QSize(18, 18));
     goUpButton->setToolTip(tr("Go Up"));
     goUpButton->setEnabled(false);
     ui->topToolbarLayout->addWidget(goUpButton);
@@ -191,48 +206,57 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Right-side toolbar buttons
     themeButton = new QToolButton(ui->topToolbar);
-    themeButton->setText(tr("\u263C"));
+    themeButton->setIcon(QIcon(":/icons/theme.svg"));
+    themeButton->setIconSize(QSize(20, 20));
     themeButton->setToolTip(tr("Theme"));
     ui->topToolbarLayout->addWidget(themeButton);
 
     settingsButton = new QToolButton(ui->topToolbar);
-    settingsButton->setText(tr("\u2699"));
+    settingsButton->setIcon(QIcon(":/icons/settings.svg"));
+    settingsButton->setIconSize(QSize(20, 20));
     settingsButton->setToolTip(tr("Editor Settings"));
     ui->topToolbarLayout->addWidget(settingsButton);
 
     // Sidebar icon buttons (bottom of drawer)
     fileTreeToggleButton = new QToolButton(ui->sidebarDrawer);
-    fileTreeToggleButton->setText(tr("\u2637"));
+    fileTreeToggleButton->setIcon(QIcon(":/icons/file-tree.svg"));
+    fileTreeToggleButton->setIconSize(QSize(20, 20));
     fileTreeToggleButton->setToolTip(tr("File Tree"));
     fileTreeToggleButton->setCheckable(true);
     fileTreeToggleButton->setChecked(true);
     ui->sidebarDrawerLayout->addWidget(fileTreeToggleButton);
 
     QWidget *iconBar = new QWidget(ui->sidebarDrawer);
+    iconBar->setObjectName("sidebarIconBar");
     QHBoxLayout *iconBarLayout = new QHBoxLayout(iconBar);
-    iconBarLayout->setContentsMargins(4, 4, 4, 4);
-    iconBarLayout->setSpacing(4);
+    iconBarLayout->setContentsMargins(6, 8, 6, 8);
+    iconBarLayout->setSpacing(6);
+    iconBarLayout->setAlignment(Qt::AlignCenter);
 
     placeholderButton = new QToolButton(iconBar);
-    placeholderButton->setText(tr("\u2691"));
+    placeholderButton->setIcon(QIcon(":/icons/todo.svg"));
+    placeholderButton->setIconSize(QSize(20, 20));
     placeholderButton->setToolTip(tr("Todo"));
     placeholderButton->setCheckable(true);
     iconBarLayout->addWidget(placeholderButton);
 
     terminalButton = new QToolButton(iconBar);
-    terminalButton->setText(tr(">_"));
+    terminalButton->setIcon(QIcon(":/icons/terminal.svg"));
+    terminalButton->setIconSize(QSize(20, 20));
     terminalButton->setToolTip(tr("Terminal"));
     terminalButton->setCheckable(true);
     iconBarLayout->addWidget(terminalButton);
 
     problemsButton = new QToolButton(iconBar);
-    problemsButton->setText(tr("\u26A0"));
+    problemsButton->setIcon(QIcon(":/icons/problems.svg"));
+    problemsButton->setIconSize(QSize(20, 20));
     problemsButton->setToolTip(tr("Problems"));
     problemsButton->setCheckable(true);
     iconBarLayout->addWidget(problemsButton);
 
     gitButton = new QToolButton(iconBar);
-    gitButton->setText(tr("\u2387"));
+    gitButton->setIcon(QIcon(":/icons/git.svg"));
+    gitButton->setIconSize(QSize(20, 20));
     gitButton->setToolTip(tr("Git"));
     gitButton->setCheckable(true);
     iconBarLayout->addWidget(gitButton);
@@ -293,6 +317,11 @@ MainWindow::MainWindow(QWidget *parent)
             gitPanel->hide();
          }
      });
+
+    connect(gitPanel, &GitPanel::commitRequested, this, &MainWindow::on_action_git_commit_triggered);
+    connect(gitPanel, &GitPanel::pushRequested, this, &MainWindow::on_action_git_push_triggered);
+    connect(gitPanel, &GitPanel::pullRequested, this, &MainWindow::on_action_git_pull_triggered);
+    connect(gitPanel, &GitPanel::fetchRequested, this, &MainWindow::on_action_git_fetch_triggered);
 
     // Theme and settings buttons
     connect(themeButton, &QToolButton::clicked, this, &MainWindow::on_action_theme_triggered);
@@ -412,6 +441,33 @@ MainWindow::MainWindow(QWidget *parent)
     actionStepOut->setShortcut(QKeySequence("Shift+F11"));
     connect(actionStepOut, &QAction::triggered, this, &MainWindow::on_action_step_out_triggered);
 
+    QMenu *toolsMenu = ui->menubar->addMenu(tr("&Tools"));
+    QAction *actionHttpClient = toolsMenu->addAction(tr("HTTP &Client"));
+    connect(actionHttpClient, &QAction::triggered, this, [this]() {
+        bottomPanelTabs->setCurrentIndex(4);
+        ui->bottomPanelContainer->show();
+    });
+    QAction *actionDbViewer = toolsMenu->addAction(tr("SQLite &Viewer"));
+    connect(actionDbViewer, &QAction::triggered, this, [this]() {
+        bottomPanelTabs->setCurrentIndex(5);
+        ui->bottomPanelContainer->show();
+    });
+    toolsMenu->addSeparator();
+    QAction *actionAICompletions = toolsMenu->addAction(tr("AI &Completions"));
+    actionAICompletions->setCheckable(true);
+    actionAICompletions->setChecked(m_aiInline->isEnabled());
+    connect(actionAICompletions, &QAction::triggered, this, [this, actionAICompletions](bool checked) {
+        m_aiInline->setSettings(
+            QSettings().value("ai/provider", "ollama").toString(),
+            QSettings().value("ai/endpoint", "http://localhost:11434/api/chat").toString(),
+            QSettings().value("ai/model", "codellama").toString(),
+            checked,
+            QSettings().value("ai/debounceMs", 400).toInt(),
+            QSettings().value("ai/apiKey", {}).toString()
+        );
+        actionAICompletions->setChecked(checked);
+    });
+
     connect(findReplaceBar, &FindReplaceBar::replaceAllComplete, this, [](int count) {
         qDebug() << "Replace all complete:" << count;
     });
@@ -455,6 +511,55 @@ MainWindow::MainWindow(QWidget *parent)
     connect(updater, &Updater::updateAvailable, this, &MainWindow::onUpdateAvailable);
     connect(updater, &Updater::updateCheckFailed, this, &MainWindow::onUpdateCheckFailed);
 
+    // AI inline completion wiring
+    m_aiInline->setSettings(
+        QSettings().value("ai/provider", "ollama").toString(),
+        QSettings().value("ai/endpoint", "http://localhost:11434/api/chat").toString(),
+        QSettings().value("ai/model", "codellama").toString(),
+        QSettings().value("ai/enabled", false).toBool(),
+        QSettings().value("ai/debounceMs", 400).toInt(),
+        QSettings().value("ai/apiKey", {}).toString()
+    );
+
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
+        if (index >= 0 && index < ui->tabWidget->count()) {
+            if (CodeEditor *ce = qobject_cast<CodeEditor*>(ui->tabWidget->widget(index))) {
+                m_aiInline->setEditor(ce);
+                m_codeActionCtrl->attach(ce, lspClient);
+                if (m_codeActionCtrl->isVisible())
+                    m_codeActionCtrl->showCurrent();
+            }
+        }
+    });
+
+    // CodeAction controller
+    connect(lspClient, &LspClient::codeActionReceived, m_codeActionCtrl, &CodeActionController::onCodeActionReceived);
+    connect(lspClient, &LspClient::diagnosticsReceived, m_codeActionCtrl, &CodeActionController::onDiagnosticsReceived);
+    connect(m_codeActionCtrl, &CodeActionController::actionTriggered, this, [](const QString &title, const QString &kind, int) {
+        qDebug() << "CodeAction triggered:" << title << kind;
+    });
+
+    // HTTP Client - add bottom panel tab
+    int httpIdx = bottomPanelTabs->addTab(tr("HTTP"));
+    bottomPanelStack->addWidget(m_httpClient);
+    m_httpClient->hide();
+
+    int sqliteIdx = bottomPanelTabs->addTab(tr("Database"));
+    bottomPanelStack->addWidget(m_sqliteViewer);
+    m_sqliteViewer->hide();
+    connect(m_httpClient, &HttpClientPanel::requestSent, this, [](const QString &url, int code) {
+        qDebug() << "HTTP request:" << url << "->" << code;
+    });
+
+    // Plugin registry
+    m_pluginRegistry->setRegistryUrl(QUrl(registryUrl));
+    m_pluginRegistry->setCheckInterval(7);
+    QTimer::singleShot(5000, m_pluginRegistry, &PluginRegistry::checkForUpdates);
+
+    connect(m_pluginRegistry, &PluginRegistry::registryUpdated, this, [this](const QJsonObject &manifest) {
+        qDebug() << "Plugin registry updated:" << manifest["version"].toString();
+    });
+
     // Config validator - validate settings on startup
     configValidator->resetInvalidSettings();
 
@@ -486,8 +591,9 @@ CodeEditor* MainWindow::getCurrentCodeEditor()
 
 QPushButton* MainWindow::createTabCloseButton(int tabIndex)
 {
-    QPushButton *closeBtn = new QPushButton(tr("\u00D7"));
-    closeBtn->setFixedSize(16, 16);
+    QPushButton *closeBtn = new QPushButton();
+    closeBtn->setIcon(QIcon(":/icons/close.svg"));
+    closeBtn->setFixedSize(20, 20);
     closeBtn->setFlat(true);
     closeBtn->setCursor(Qt::ArrowCursor);
     connect(closeBtn, &QPushButton::clicked, this, [this, tabIndex]() {
@@ -496,62 +602,70 @@ QPushButton* MainWindow::createTabCloseButton(int tabIndex)
     return closeBtn;
 }
 
-QWidget* MainWindow::createWelcomeWidget()
-{
-    QWidget *widget = new QWidget(this);
+ QWidget* MainWindow::createWelcomeWidget()
+ {
+     QWidget *widget = new QWidget(this);
 
-    QLabel *titleLabel = new QLabel(tr("Welcome to Scriptura"), widget);
-    titleLabel->setObjectName("welcomeTitle");
-    titleLabel->setAlignment(Qt::AlignCenter);
-    QFont titleFont = titleLabel->font();
-    titleFont.setPointSize(32);
-    titleFont.setBold(true);
-    titleLabel->setFont(titleFont);
+     // App icon
+     QLabel *iconLabel = new QLabel(widget);
+     iconLabel->setPixmap(QIcon(":/icons/app-icon.svg").pixmap(64, 64));
+     iconLabel->setAlignment(Qt::AlignCenter);
 
-    QLabel *descriptionLabel = new QLabel(tr("Open a project or create a new file to start editing."), widget);
-    descriptionLabel->setAlignment(Qt::AlignCenter);
-    QFont descFont = descriptionLabel->font();
-    descFont.setPointSize(11);
-    descriptionLabel->setFont(descFont);
-    descriptionLabel->setStyleSheet("color: palette(mid);");
+     QLabel *titleLabel = new QLabel(tr("Welcome to Scriptura"), widget);
+     titleLabel->setObjectName("welcomeTitle");
+     titleLabel->setAlignment(Qt::AlignCenter);
+     QFont titleFont = titleLabel->font();
+     titleFont.setPointSize(28);
+     titleFont.setBold(true);
+     titleLabel->setFont(titleFont);
 
-    QPushButton *openProjectButton = new QPushButton(tr("Open Project"), widget);
-    openProjectButton->setMinimumWidth(140);
-    openProjectButton->setStyleSheet("QPushButton { padding: 8px 16px; }");
-    
-    QPushButton *newFileButton = new QPushButton(tr("New File"), widget);
-    newFileButton->setMinimumWidth(140);
-    newFileButton->setStyleSheet("QPushButton { padding: 8px 16px; }");
+     QLabel *descriptionLabel = new QLabel(tr("Open a project or create a new file to start editing."), widget);
+     descriptionLabel->setAlignment(Qt::AlignCenter);
+     QFont descFont = descriptionLabel->font();
+     descFont.setPointSize(11);
+     descriptionLabel->setFont(descFont);
+     descriptionLabel->setStyleSheet("color: palette(mid);");
 
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(openProjectButton);
-    buttonLayout->addSpacing(12);
-    buttonLayout->addWidget(newFileButton);
-    buttonLayout->addStretch();
+     QPushButton *openProjectButton = new QPushButton(QIcon(":/icons/folder.svg"), tr("Open Project"), widget);
+     openProjectButton->setObjectName("primaryButton");
+     openProjectButton->setMinimumWidth(160);
 
-    QFrame *recentProjectsFrame = new QFrame(widget);
-    recentProjectsFrame->setFrameShape(QFrame::StyledPanel);
-    recentProjectsFrame->setFrameShadow(QFrame::Sunken);
-    recentProjectsLayout = new QVBoxLayout(recentProjectsFrame);
-    recentProjectsLayout->setSpacing(6);
-    QLabel *recentLabel = new QLabel(tr("<b>Recent Projects:</b>"), recentProjectsFrame);
-    recentProjectsLayout->addWidget(recentLabel);
+     QPushButton *newFileButton = new QPushButton(tr("New File"), widget);
+     newFileButton->setObjectName("primaryButton");
+     newFileButton->setMinimumWidth(160);
 
-    updateRecentProjectsOnWelcome();
+     QHBoxLayout *buttonLayout = new QHBoxLayout();
+     buttonLayout->addStretch();
+     buttonLayout->addWidget(openProjectButton);
+     buttonLayout->addSpacing(12);
+     buttonLayout->addWidget(newFileButton);
+     buttonLayout->addStretch();
 
-    QVBoxLayout *layout = new QVBoxLayout(widget);
-    layout->setSpacing(16);
-    layout->addStretch();
-    layout->addWidget(titleLabel);
-    layout->addWidget(descriptionLabel);
-    layout->addSpacing(24);
-    layout->addLayout(buttonLayout);
-    layout->addSpacing(32);
-    layout->addWidget(recentProjectsFrame);
-    layout->addSpacing(24);
-    layout->addWidget(createKeyboardShortcutsWidget());
-    layout->addStretch();
+     QFrame *recentProjectsFrame = new QFrame(widget);
+     recentProjectsFrame->setObjectName("recentProjectsFrame");
+     recentProjectsFrame->setFrameShape(QFrame::StyledPanel);
+     recentProjectsFrame->setFrameShadow(QFrame::Sunken);
+     recentProjectsLayout = new QVBoxLayout(recentProjectsFrame);
+     recentProjectsLayout->setSpacing(6);
+     QLabel *recentLabel = new QLabel(tr("<b>Recent Projects:</b>"), recentProjectsFrame);
+     recentProjectsLayout->addWidget(recentLabel);
+
+     updateRecentProjectsOnWelcome();
+
+     QVBoxLayout *layout = new QVBoxLayout(widget);
+     layout->setSpacing(16);
+     layout->addStretch();
+     layout->addWidget(iconLabel);
+     layout->addWidget(titleLabel);
+     layout->addSpacing(8);
+     layout->addWidget(descriptionLabel);
+     layout->addSpacing(32);
+     layout->addLayout(buttonLayout);
+     layout->addSpacing(40);
+     layout->addWidget(recentProjectsFrame);
+     layout->addSpacing(24);
+     layout->addWidget(createKeyboardShortcutsWidget());
+     layout->addStretch();
 
     connect(openProjectButton, &QPushButton::clicked, this, &MainWindow::on_action_open_project_triggered);
     connect(newFileButton, &QPushButton::clicked, this, [this]() {
@@ -936,19 +1050,35 @@ QWidget* MainWindow::createUpdaterSettingsWidget()
     descriptionLabel->setWordWrap(true);
     layout->addWidget(descriptionLabel);
 
-    QGroupBox *checkGroup = new QGroupBox(tr("Check for Updates"), widget);
-    QVBoxLayout *checkLayout = new QVBoxLayout(checkGroup);
+     QGroupBox *checkGroup = new QGroupBox(tr("Check for Updates"), widget);
+     QVBoxLayout *checkLayout = new QVBoxLayout(checkGroup);
 
-    QPushButton *checkStableButton = new QPushButton(tr("Check for Latest Release (Recommended)"), checkGroup);
-    QPushButton *checkPreReleaseButton = new QPushButton(tr("Check for Latest Pre-release"), checkGroup);
-    checkPreReleaseButton->setToolTip(tr("Pre-releases may be unstable. Update at your own risk."));
+     QPushButton *checkStableButton = new QPushButton(tr("Check for Latest Release (Recommended)"), checkGroup);
+     QPushButton *checkPreReleaseButton = new QPushButton(tr("Check for Latest Pre-release"), checkGroup);
+     checkPreReleaseButton->setToolTip(tr("Pre-releases may be unstable. Update at your own risk."));
 
-    checkLayout->addWidget(checkStableButton);
-    checkLayout->addWidget(checkPreReleaseButton);
+     checkLayout->addWidget(checkStableButton);
+     checkLayout->addWidget(checkPreReleaseButton);
 
-    layout->addWidget(checkGroup);
+     layout->addWidget(checkGroup);
 
-    QGroupBox *infoGroup = new QGroupBox(tr("Current Version"), widget);
+     QGroupBox *registryGroup = new QGroupBox(tr("Plugin Registry"), widget);
+     QVBoxLayout *registryLayout = new QVBoxLayout(registryGroup);
+
+     QLabel *registryUrlLabel = new QLabel(tr("Registry URL:"), registryGroup);
+     QLineEdit *registryUrlEdit = new QLineEdit(registryGroup);
+     registryUrlEdit->setPlaceholderText(tr("https://example.com/plugin-registry.json"));
+     registryUrlEdit->setText(registryUrl);
+     connect(registryUrlEdit, &QLineEdit::textChanged, this, [this](const QString &url) {
+         m_pluginRegistry->setRegistryUrl(QUrl(url));
+         QSettings().setValue("plugin/registryUrl", url);
+     });
+     registryLayout->addWidget(registryUrlLabel);
+     registryLayout->addWidget(registryUrlEdit);
+
+     layout->addWidget(registryGroup);
+
+     QGroupBox *infoGroup = new QGroupBox(tr("Current Version"), widget);
     QVBoxLayout *infoLayout = new QVBoxLayout(infoGroup);
 
     QLabel *versionLabel = new QLabel(tr("Version: %1").arg(SCRIPTURA_VERSION), infoGroup);
@@ -1672,8 +1802,9 @@ void MainWindow::updateTabBarVisibility()
 
 QPushButton* MainWindow::createSettingsTabCloseButton(int tabIndex)
 {
-    QPushButton *closeBtn = new QPushButton(tr("\u00D7"));
-    closeBtn->setFixedSize(16, 16);
+    QPushButton *closeBtn = new QPushButton();
+    closeBtn->setIcon(QIcon(":/icons/close.svg"));
+    closeBtn->setFixedSize(20, 20);
     closeBtn->setFlat(true);
     closeBtn->setCursor(Qt::ArrowCursor);
     connect(closeBtn, &QPushButton::clicked, this, [this, tabIndex]() {
@@ -1689,18 +1820,54 @@ void MainWindow::onBottomTabChanged(int index)
         problemPanel->show();
         gitPanel->hide();
         projectSearchPanel->hide();
+        m_httpClient->hide();
+        m_sqliteViewer->hide();
+        debugPanel->hide();
         problemsButton->setChecked(true);
         gitButton->setChecked(false);
     } else if (index == 1) {
         problemPanel->hide();
         gitPanel->show();
         projectSearchPanel->hide();
+        m_httpClient->hide();
+        m_sqliteViewer->hide();
+        debugPanel->hide();
         problemsButton->setChecked(false);
         gitButton->setChecked(true);
     } else if (index == 2) {
         problemPanel->hide();
         gitPanel->hide();
         projectSearchPanel->show();
+        m_httpClient->hide();
+        m_sqliteViewer->hide();
+        debugPanel->hide();
+        problemsButton->setChecked(false);
+        gitButton->setChecked(false);
+    } else if (index == 3) {
+        problemPanel->hide();
+        gitPanel->hide();
+        projectSearchPanel->hide();
+        m_httpClient->hide();
+        m_sqliteViewer->hide();
+        debugPanel->show();
+        problemsButton->setChecked(false);
+        gitButton->setChecked(false);
+    } else if (index == 4) {
+        problemPanel->hide();
+        gitPanel->hide();
+        projectSearchPanel->hide();
+        m_httpClient->show();
+        m_sqliteViewer->hide();
+        debugPanel->hide();
+        problemsButton->setChecked(false);
+        gitButton->setChecked(false);
+    } else if (index == 5) {
+        problemPanel->hide();
+        gitPanel->hide();
+        projectSearchPanel->hide();
+        m_httpClient->hide();
+        m_sqliteViewer->show();
+        debugPanel->hide();
         problemsButton->setChecked(false);
         gitButton->setChecked(false);
     }
@@ -1834,272 +2001,271 @@ void MainWindow::applyTheme(const Theme &theme)
     QColor midColor = palette.color(QPalette::Mid);
     QColor lightColor = palette.color(QPalette::Light);
 
-    QString neumorphicSheet = QString(
-        "QWidget {"
-        "  background-color: %1;"
-        "  color: %2;"
-        "  border-radius: 12px;"
-        "}"
-        ""
-        "QMainWindow {"
-        "  background-color: %3;"
-        "}"
-        ""
-        "QToolButton {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 6px 12px;"
-        "  color: %2;"
-        "}"
-        "QToolButton:hover {"
-        "  background-color: %5;"
-        "}"
-        "QToolButton:checked {"
-        "  background-color: %5;"
-        "  border: 1px solid %6;"
-        "}"
-        ""
-        "QPushButton {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 8px 16px;"
-        "  color: %2;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: %5;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: %7;"
-        "  border: 1px solid %7;"
-        "}"
-        ""
-        "QLineEdit, QTextEdit, QPlainTextEdit {"
-        "  background-color: %8;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 6px;"
-        "  color: %2;"
-        "  selection-background-color: %6;"
-        "  selection-color: %2;"
-        "}"
-        ""
-        "QTreeView {"
-        "  background-color: %3;"
-        "  border: none;"
-        "  border-radius: 8px;"
-        "  selection-background-color: %5;"
-        "  selection-color: %2;"
-        "}"
-        "QTreeView::item {"
-        "  padding: 4px;"
-        "  border-radius: 4px;"
-        "}"
-        "QTreeView::item:hover {"
-        "  background-color: %5;"
-        "}"
-        "QTreeView::item:selected {"
-        "  background-color: %5;"
-        "}"
-        ""
-        "QTabBar::tab {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 6px 16px;"
-        "  margin-right: 4px;"
-        "  color: %2;"
-        "}"
-        "QTabBar::tab:selected {"
-        "  background-color: %5;"
-        "  border: 1px solid %6;"
-        "}"
-        "QTabBar::tab:hover:!selected {"
-        "  background-color: %8;"
-        "}"
-        ""
-        "QTabWidget::pane {"
-        "  border: 1px solid %4;"
-        "  border-radius: 0px 0px 8px 8px;"
-        "  top: -1px;"
-        "}"
-        ""
-        "QStatusBar {"
-        "  background-color: %3;"
-        "  border-top: 1px solid %4;"
-        "  color: %2;"
-        "}"
-        ""
-        "QMenuBar {"
-        "  background-color: %3;"
-        "  border-bottom: 1px solid %4;"
-        "  color: %2;"
-        "  border-radius: 0px;"
-        "}"
-        "QMenuBar::item {"
-        "  background-color: transparent;"
-        "  padding: 4px 12px;"
-        "  border-radius: 6px;"
-        "}"
-        "QMenuBar::item:selected {"
-        "  background-color: %5;"
-        "}"
-        ""
-        "QMenu {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 4px;"
-        "}"
-        "QMenu::item {"
-        "  background-color: transparent;"
-        "  padding: 6px 24px;"
-        "  border-radius: 4px;"
-        "}"
-        "QMenu::item:selected {"
-        "  background-color: %5;"
-        "}"
-        ""
-        "QScrollBar:vertical {"
-        "  background-color: %3;"
-        "  width: 10px;"
-        "  border-radius: 5px;"
-        "}"
-        "QScrollBar::handle:vertical {"
-        "  background-color: %5;"
-        "  border-radius: 5px;"
-        "  min-height: 20px;"
-        "}"
-        "QScrollBar::handle:vertical:hover {"
-        "  background-color: %6;"
-        "}"
-        "QScrollBar:horizontal {"
-        "  background-color: %3;"
-        "  height: 10px;"
-        "  border-radius: 5px;"
-        "}"
-        "QScrollBar::handle:horizontal {"
-        "  background-color: %5;"
-        "  border-radius: 5px;"
-        "  min-width: 20px;"
-        "}"
-        "QScrollBar::handle:horizontal:hover {"
-        "  background-color: %6;"
-        "}"
-        ""
-        "QGroupBox {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  margin-top: 16px;"
-        "  padding-top: 8px;"
-        "}"
-        "QGroupBox::title {"
-        "  subcontrol-origin: margin;"
-        "  subcontrol-position: top center;"
-        "  padding: 0 8px;"
-        "  color: %2;"
-        "}"
-        ""
-        "QLabel {"
-        "  background-color: transparent;"
-        "  color: %2;"
-        "  border-radius: 4px;"
-        "}"
-        ""
-        "QDialog {"
-        "  background-color: %3;"
-        "  border-radius: 12px;"
-        "}"
-        ""
-        "QCheckBox, QRadioButton {"
-        "  spacing: 8px;"
-        "  border-radius: 4px;"
-        "}"
-        "QCheckBox::indicator, QRadioButton::indicator {"
-        "  width: 16px;"
-        "  height: 16px;"
-        "  border-radius: 4px;"
-        "  border: 1px solid %4;"
-        "  background-color: %3;"
-        "}"
-        "QRadioButton::indicator {"
-        "  border-radius: 8px;"
-        "}"
-        "QCheckBox::indicator:checked, QRadioButton::indicator:checked {"
-        "  background-color: %6;"
-        "  border: 1px solid %6;"
-        "}"
-        ""
-        "QSpinBox, QFontComboBox {"
-        "  background-color: %8;"
-        "  border: 1px solid %4;"
-        "  border-radius: 6px;"
-        "  padding: 4px;"
-        "  color: %2;"
-        "}"
-        ""
-        "QToolBar {"
-        "  background-color: %3;"
-        "  border: none;"
-        "  spacing: 4px;"
-        "}"
-        ""
-        "QTabBar {"
-        "  background-color: transparent;"
-        "  border: none;"
-        "}"
-        ""
-        "QWidget#bottomPanelContainer {"
-        "  background-color: %3;"
-        "  border-top: 1px solid %4;"
-        "  border-radius: 0px;"
-        "}"
-        ""
-        "QWidget#sidebarDrawer {"
-        "  background-color: %3;"
-        "  border-right: 1px solid %4;"
-        "  border-radius: 0px;"
-        "}"
-        ""
-        "QWidget#editorContainer {"
-        "  background-color: %8;"
-        "}"
-        ""
-        "QWidget#topToolbar {"
-        "  background-color: %3;"
-        "  border-bottom: 1px solid %4;"
-        "  border-radius: 0px;"
-        "}"
-        ""
-        "QFrame#recentProjectsFrame {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 12px;"
-        "}"
-        ""
-        "QPushButton#projectButton {"
-        "  background-color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 8px;"
-        "  padding: 8px;"
-        "  text-align: left;"
-        "}"
-        "QPushButton#projectButton:hover {"
-        "  background-color: %5;"
-        "}"
-    )
-    .arg(windowColor.name())
-    .arg(textColor.name())
-    .arg(buttonColor.name())
-    .arg(midColor.name())
-    .arg(lightColor.name())
-    .arg(accentColor.name())
-    .arg(midColor.darker(110).name())
-    .arg(baseColor.name());
+    QString modernSheet = QString(R"(
+        QMainWindow, QDialog {
+            background-color: %1;
+        }
 
-    qApp->setStyleSheet(neumorphicSheet);
+        QGroupBox, QFrame#recentProjectsFrame {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 12px;
+            margin-top: 16px;
+            padding-top: 8px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top center;
+            padding: 0 8px;
+            color: %4;
+        }
+
+        QToolButton {
+            background-color: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 6px;
+            color: %4;
+            min-width: 32px;
+            min-height: 32px;
+        }
+        QToolButton:hover {
+            background-color: %5;
+            border: 1px solid %3;
+        }
+        QToolButton:checked {
+            background-color: %6;
+            border: 1px solid %6;
+            color: %1;
+        }
+        QToolButton:pressed {
+            background-color: %3;
+        }
+
+        QPushButton {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 8px;
+            padding: 8px 16px;
+            color: %4;
+            font-weight: 500;
+            min-height: 36px;
+        }
+        QPushButton:hover {
+            background-color: %5;
+        }
+        QPushButton:pressed {
+            background-color: %3;
+        }
+        QPushButton:disabled {
+            background-color: %3;
+            color: palette(mid);
+            border-color: %3;
+        }
+
+        QLineEdit, QSpinBox, QFontComboBox {
+            background-color: %7;
+            border: 1px solid %3;
+            border-radius: 6px;
+            padding: 4px 8px;
+            color: %4;
+        }
+        QLineEdit:focus, QSpinBox:focus, QFontComboBox:focus {
+            border: 2px solid %6;
+            padding: 3px 7px;
+        }
+
+        QTextEdit, QPlainTextEdit {
+            background-color: %7;
+            border: none;
+            color: %4;
+            selection-background-color: %6;
+            selection-color: %1;
+        }
+
+        QTreeView {
+            background-color: %2;
+            border: none;
+            selection-background-color: %6;
+            selection-color: %1;
+        }
+        QTreeView::item {
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        QTreeView::item:hover {
+            background-color: %5;
+        }
+
+        QTabBar::tab {
+            background-color: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 8px 16px;
+            margin-right: 2px;
+            color: palette(mid);
+        }
+        QTabBar::tab:hover:!selected {
+            background-color: %5;
+            border-radius: 8px 8px 0px 0px;
+            color: %4;
+        }
+        QTabBar::tab:selected {
+            background-color: %7;
+            border-bottom: 2px solid %6;
+            color: %4;
+        }
+
+        QTabWidget::pane {
+            border: none;
+            top: -1px;
+        }
+
+        QStatusBar {
+            background-color: %2;
+            border-top: 1px solid %3;
+            color: palette(mid);
+            padding: 2px 8px;
+        }
+
+        QMenuBar {
+            background-color: %2;
+            border-bottom: 1px solid %3;
+            padding: 2px;
+        }
+        QMenuBar::item {
+            background: transparent;
+            padding: 4px 12px;
+            border-radius: 6px;
+            color: %4;
+        }
+        QMenuBar::item:selected {
+            background-color: %5;
+            color: %4;
+        }
+
+        QMenu {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 8px;
+            padding: 4px;
+        }
+        QMenu::item {
+            background-color: transparent;
+            padding: 6px 24px;
+            border-radius: 4px;
+            color: %4;
+        }
+        QMenu::item:selected {
+            background-color: %6;
+            color: %1;
+        }
+
+        QScrollBar:vertical {
+            background-color: %2;
+            width: 10px;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:vertical {
+            background-color: %5;
+            border-radius: 5px;
+            min-height: 20px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background-color: %6;
+        }
+        QScrollBar:horizontal {
+            background-color: %2;
+            height: 10px;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:horizontal {
+            background-color: %5;
+            border-radius: 5px;
+            min-width: 20px;
+        }
+        QScrollBar::handle:horizontal:hover {
+            background-color: %6;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            height: 0px;
+            width: 0px;
+        }
+
+        QCheckBox, QRadioButton {
+            spacing: 8px;
+            color: %4;
+        }
+        QCheckBox::indicator, QRadioButton::indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 1px solid %3;
+            background-color: %7;
+        }
+        QRadioButton::indicator {
+            border-radius: 8px;
+        }
+        QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+            background-color: %6;
+            border: 1px solid %6;
+        }
+
+        QToolBar {
+            background-color: %2;
+            border: none;
+            spacing: 4px;
+        }
+
+        QTabBar {
+            background-color: transparent;
+            border: none;
+        }
+
+        QWidget#bottomPanelContainer {
+            background-color: %2;
+            border-top: 1px solid %3;
+        }
+
+        QWidget#sidebarDrawer {
+            background-color: %2;
+            border-right: 1px solid %3;
+        }
+
+        QWidget#editorContainer {
+            background-color: %7;
+        }
+
+        QWidget#topToolbar {
+            background-color: %2;
+            border-bottom: 1px solid %3;
+        }
+
+        QFrame#recentProjectsFrame {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 12px;
+        }
+
+        QPushButton#projectButton {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: left;
+        }
+        QPushButton#projectButton:hover {
+            background-color: %5;
+        }
+    )")
+        .arg(windowColor.name())
+        .arg(buttonColor.name())
+        .arg(midColor.name())
+        .arg(textColor.name())
+        .arg(lightColor.name())
+        .arg(accentColor.name())
+        .arg(baseColor.name());
 
     for (QWidget *widget : QApplication::allWidgets()) {
         widget->setPalette(palette);
@@ -3256,6 +3422,8 @@ void MainWindow::on_action_command_palette_triggered()
     commandPalette->registerCommand({"project-search", tr("Project Search"), "Ctrl+Shift+F", [this]() { on_action_project_search_triggered(); }});
     commandPalette->registerCommand({"git-commit", tr("Git Commit..."), "", [this]() { on_action_git_commit_triggered(); }});
     commandPalette->registerCommand({"git-push", tr("Git Push..."), "", [this]() { on_action_git_push_triggered(); }});
+    commandPalette->registerCommand({"git-pull", tr("Git Pull..."), "", [this]() { on_action_git_pull_triggered(); }});
+    commandPalette->registerCommand({"git-fetch", tr("Git Fetch"), "", [this]() { on_action_git_fetch_triggered(); }});
     commandPalette->registerCommand({"theme", tr("Theme"), "Ctrl+T", [this]() { on_action_theme_triggered(); }});
     commandPalette->registerCommand({"editor-settings", tr("Editor Settings"), "", [this]() { on_action_editor_settings_triggered(); }});
     commandPalette->registerCommand({"shortcuts", tr("Keyboard Shortcuts"), "Ctrl+K", [this]() { showKeyboardShortcuts(); }});

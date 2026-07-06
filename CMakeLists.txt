@@ -23,8 +23,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Network)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Network)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Network Sql)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Network Sql)
 
 set(TS_FILES scriptura_en_001.ts)
 
@@ -122,8 +122,24 @@ set(SCRIPTURA_CORE_SOURCES
         pluginupdater.cpp
         plugincrashhandler.h
         plugincrashhandler.cpp
+        plugincrashhandler.h
         versionfetcher.h
         versionfetcher.cpp
+        # AI Inline Completions
+        plugins/aiinlinecompletion.h
+        plugins/aiinlinecompletion.cpp
+        # HTTP Client
+        plugins/httpclientpanel.h
+        plugins/httpclientpanel.cpp
+        # CodeAction UI
+        plugins/codeactionui.h
+        plugins/codeactionui.cpp
+        # SQLite Viewer
+        plugins/sqliteviewer.h
+        plugins/sqliteviewer.cpp
+        # Plugin Registry
+        plugins/pluginregistry.h
+        plugins/pluginregistry.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -151,9 +167,10 @@ set_target_properties(scriptura_core PROPERTIES
     FOLDER "Internal"
 )
 
-target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::Sql)
 target_include_directories(scriptura_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 

@@ -16,6 +16,9 @@ QJsonObject DebugConfiguration::toJson() const
     if (!debuggerPath.isEmpty()) {
         obj["debuggerPath"] = debuggerPath;
     }
+    if (!processId.isEmpty()) {
+        obj["processId"] = processId;
+    }
     return obj;
 }
 
@@ -36,6 +39,7 @@ DebugConfiguration DebugConfiguration::fromJson(const QJsonObject &obj)
     
     config.cwd = obj["cwd"].toString();
     config.debuggerPath = obj["debuggerPath"].toString();
+    config.processId = obj["processId"].toString();
     
     return config;
 }

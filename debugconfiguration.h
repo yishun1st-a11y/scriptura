@@ -15,6 +15,7 @@ struct DebugConfiguration
     QStringList args;
     QString cwd;
     QString debuggerPath;
+    QString processId;
     
     QJsonObject toJson() const;
     static DebugConfiguration fromJson(const QJsonObject &obj);

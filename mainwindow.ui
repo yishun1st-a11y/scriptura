@@ -307,13 +307,15 @@
     <addaction name="action_new_window"/>
     <addaction name="action_clone_window"/>
    </widget>
-   <widget class="QMenu" name="menu_git">
-    <property name="title">
-     <string>&amp;Git</string>
-    </property>
-    <addaction name="action_git_commit"/>
-    <addaction name="action_git_push"/>
-   </widget>
+    <widget class="QMenu" name="menu_git">
+     <property name="title">
+      <string>&amp;Git</string>
+     </property>
+     <addaction name="action_git_commit"/>
+     <addaction name="action_git_push"/>
+     <addaction name="action_git_pull"/>
+     <addaction name="action_git_fetch"/>
+    </widget>
     <widget class="QMenu" name="menu_settings">
      <property name="title">
       <string>&amp;Settings</string>
@@ -433,11 +435,21 @@
     <string>&amp;Commit...</string>
    </property>
   </action>
-  <action name="action_git_push">
-   <property name="text">
-    <string>&amp;Push...</string>
-   </property>
-  </action>
+   <action name="action_git_push">
+    <property name="text">
+     <string>&amp;Push...</string>
+    </property>
+   </action>
+   <action name="action_git_pull">
+    <property name="text">
+     <string>P&amp;ull...</string>
+    </property>
+   </action>
+   <action name="action_git_fetch">
+    <property name="text">
+     <string>&amp;Fetch</string>
+    </property>
+   </action>
    <action name="action_about">
     <property name="text">
      <string>&amp;About</string>

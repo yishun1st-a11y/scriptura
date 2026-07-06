@@ -34,6 +34,9 @@ public:
         bool verified = false;
         int line = 0;
         QString message;
+        QString condition;
+        QString hitCondition;
+        QString logMessage;
     };
 
     struct StackFrame {
@@ -67,6 +70,7 @@ public:
     void launch();
     void configurationDone();
     void setBreakpoints(const QString &sourcePath, const QList<int> &lines);
+    void setBreakpointsWithConditions(const QString &sourcePath, const QList<Breakpoint> &breakpoints);
     void continueDebug();
     void next();
     void stepIn();

@@ -47,6 +47,11 @@
 #include "taskrunner.h"
 #include "minimap.h"
 #include "splitmanager.h"
+#include "aiinlinecompletion.h"
+#include "httpclientpanel.h"
+#include "codeactionui.h"
+#include "sqliteviewer.h"
+#include "pluginregistry.h"
 #include "breadcrumb.h"
 
 class DapClient;
@@ -230,8 +235,9 @@ private:
     QTimer *lspDebounceTimer;
     QStringList recentProjects;
     int maxRecentProjects = 10;
-    QStringList m_languageServers;
-    Updater *updater;
+     QStringList m_languageServers;
+     QString registryUrl;
+     Updater *updater;
     ConfigValidator *configValidator;
     LspClient *lspClient;
     PluginManager *pluginManager;
@@ -254,6 +260,11 @@ private:
     Minimap *m_minimap;
     SplitManager *m_splitManager;
     Breadcrumb *m_breadcrumb;
+    AiInlineCompletion *m_aiInline;
+    HttpClientPanel *m_httpClient;
+    CodeActionController *m_codeActionCtrl;
+    SqliteViewerPanel *m_sqliteViewer;
+    PluginRegistry *m_pluginRegistry;
 
     void updateCursorPosition();
     void updateStatusBar();

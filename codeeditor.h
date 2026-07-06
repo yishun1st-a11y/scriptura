@@ -97,6 +97,9 @@ public:
     int tabWidth() const;
     void setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags);
     void setInlayHints(const QList<LspClient::InlayHint> &hints);
+    void setGhostText(const QString &text);
+    void clearGhostText();
+    QString ghostText() const { return m_ghostText; }
 
     void setBreakpointLine(int line, bool enabled);
     QSet<int> breakpointLines() const { return m_breakpointLines; }
@@ -120,12 +123,14 @@ private slots:
 
 signals:
     void breakpointToggled(int line, bool enabled);
+    void ghostTextAccepted(const QString &text);
 
 private:
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
     void drawIndentGuides(QPaintEvent *event);
     void drawInlayHints(QPaintEvent *event);
+    void drawGhostText(QPaintEvent *event);
     void updateHoverTooltip(const QPoint &pos);
     void updateAllSelections();
 
@@ -142,6 +147,8 @@ private:
     bool m_columnSelectionMode = false;
     QSet<int> m_breakpointLines;
     int m_currentDebugLine = -1;
+    QString m_ghostText;
+    bool m_acceptGhostText = false;
 };
 
 class LineNumberArea : public QWidget
