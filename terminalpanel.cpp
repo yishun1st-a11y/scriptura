@@ -41,7 +41,7 @@ TerminalPanel::TerminalPanel(QWidget *parent)
     titleLayout->setSpacing(8);
 
     m_titleLabel->setObjectName("terminalTitleLabel");
-    m_titleLabel->setStyleSheet("font-weight: bold; color: #ffffff;");
+    m_titleLabel->setStyleSheet("font-weight: bold; color: palette(highlighted-text);");
     titleLayout->addWidget(m_titleLabel);
     titleLayout->addStretch();
 
@@ -55,7 +55,7 @@ TerminalPanel::TerminalPanel(QWidget *parent)
     m_outputEdit->setReadOnly(true);
     m_outputEdit->setPlaceholderText(tr("Terminal output will appear here..."));
     m_outputEdit->setStyleSheet(
-        "QPlainTextEdit { border: none; background: #1e1e1e; color: #d4d4d4; font-family: monospace; }"
+        "QPlainTextEdit { border: none; background: palette(base); color: palette(text); font-family: monospace; }"
     );
     QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     monoFont.setPointSize(10);
@@ -76,10 +76,10 @@ TerminalPanel::TerminalPanel(QWidget *parent)
 
     m_promptLabel = new QLabel("$", inputWidget);
     m_promptLabel->setObjectName("terminalPromptLabel");
-    m_promptLabel->setStyleSheet("font-family: monospace; font-weight: bold; color: #4ec9b0; background: transparent;");
+    m_promptLabel->setStyleSheet("font-family: monospace; font-weight: bold; color: palette(highlight); background: transparent;");
     m_inputLayout->addWidget(m_promptLabel);
 
-    m_inputEdit->setStyleSheet("QLineEdit { border: none; background: #1e1e1e; color: #d4d4d4; font-family: monospace; }");
+    m_inputEdit->setStyleSheet("QLineEdit { border: none; background: palette(base); color: palette(text); font-family: monospace; }");
     m_inputEdit->setFont(monoFont);
     m_inputLayout->addWidget(m_inputEdit);
 
@@ -94,7 +94,7 @@ TerminalPanel::TerminalPanel(QWidget *parent)
     m_statusLayout->addStretch();
     statusWidget->setLayout(m_statusLayout);
 
-    m_statusLabel->setStyleSheet("color: #888888; font-size: 11px;");
+    m_statusLabel->setStyleSheet("color: palette(mid); font-size: 11px;");
     m_mainLayout->addWidget(statusWidget);
 
     // Install event filter for keyboard shortcuts
@@ -111,8 +111,8 @@ TerminalPanel::TerminalPanel(QWidget *parent)
             this, &TerminalPanel::onProcessError);
 
     // Style the title bar and status bar
-    titleBar->setStyleSheet("background: #2d2d2d; border-bottom: 1px solid #3c3c3c;");
-    statusWidget->setStyleSheet("background: #252526; border-top: 1px solid #3c3c3c;");
+    titleBar->setStyleSheet("background: palette(button); border-bottom: 1px solid palette(mid);");
+    statusWidget->setStyleSheet("background: palette(button); border-top: 1px solid palette(mid);");
 }
 
 TerminalPanel::~TerminalPanel()

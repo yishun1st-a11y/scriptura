@@ -2002,10 +2002,14 @@ void MainWindow::applyTheme(const Theme &theme)
     QColor lightColor = palette.color(QPalette::Light);
 
     QString modernSheet = QString(R"(
+        /* Modern Professional IDE Styling with Enhanced Visual Hierarchy */
+        
+        /* Base widget styling */
         QMainWindow, QDialog {
             background-color: %1;
         }
 
+        /* Group boxes and frames */
         QGroupBox, QFrame#recentProjectsFrame {
             background-color: %2;
             border: 1px solid %3;
@@ -2018,16 +2022,19 @@ void MainWindow::applyTheme(const Theme &theme)
             subcontrol-position: top center;
             padding: 0 8px;
             color: %4;
+            font-weight: 600;
         }
 
+        /* Tool buttons with modern styling */
         QToolButton {
             background-color: transparent;
             border: 1px solid transparent;
             border-radius: 8px;
-            padding: 6px;
+            padding: 8px;
             color: %4;
             min-width: 32px;
             min-height: 32px;
+            margin: 2px;
         }
         QToolButton:hover {
             background-color: %5;
@@ -2041,7 +2048,11 @@ void MainWindow::applyTheme(const Theme &theme)
         QToolButton:pressed {
             background-color: %3;
         }
+        QToolButton:disabled {
+            color: palette(mid);
+        }
 
+        /* Push buttons with professional styling */
         QPushButton {
             background-color: %2;
             border: 1px solid %3;
@@ -2050,9 +2061,11 @@ void MainWindow::applyTheme(const Theme &theme)
             color: %4;
             font-weight: 500;
             min-height: 36px;
+            min-width: 80px;
         }
         QPushButton:hover {
             background-color: %5;
+            border-color: %4;
         }
         QPushButton:pressed {
             background-color: %3;
@@ -2063,47 +2076,71 @@ void MainWindow::applyTheme(const Theme &theme)
             border-color: %3;
         }
 
+        /* Input fields with modern styling */
         QLineEdit, QSpinBox, QFontComboBox {
             background-color: %7;
             border: 1px solid %3;
             border-radius: 6px;
-            padding: 4px 8px;
+            padding: 6px 10px;
             color: %4;
+            min-height: 28px;
         }
         QLineEdit:focus, QSpinBox:focus, QFontComboBox:focus {
             border: 2px solid %6;
-            padding: 3px 7px;
+            padding: 5px 9px;
+            background-color: %7;
+        }
+        QLineEdit:disabled, QSpinBox:disabled, QFontComboBox:disabled {
+            border-color: %3;
+            color: palette(mid);
+            background-color: %2;
         }
 
+        /* Text edit areas */
         QTextEdit, QPlainTextEdit {
             background-color: %7;
-            border: none;
+            border: 1px solid %3;
+            border-radius: 6px;
+            padding: 8px;
             color: %4;
             selection-background-color: %6;
             selection-color: %1;
         }
+        QTextEdit:focus, QPlainTextEdit:focus {
+            border: 2px solid %6;
+        }
 
+        /* Tree view with modern styling */
         QTreeView {
             background-color: %2;
-            border: none;
+            border: 1px solid %3;
+            border-radius: 6px;
             selection-background-color: %6;
             selection-color: %1;
         }
         QTreeView::item {
             padding: 4px 8px;
             border-radius: 4px;
+            margin: 1px;
         }
         QTreeView::item:hover {
             background-color: %5;
         }
+        QTreeView::item:selected {
+            background-color: %6;
+            color: %1;
+            border-radius: 4px;
+        }
 
+        /* Modern tab styling */
         QTabBar::tab {
             background-color: transparent;
             border: none;
             border-bottom: 2px solid transparent;
             padding: 8px 16px;
-            margin-right: 2px;
+            margin-right: 4px;
             color: palette(mid);
+            min-width: 100px;
         }
         QTabBar::tab:hover:!selected {
             background-color: %5;
@@ -2114,6 +2151,10 @@ void MainWindow::applyTheme(const Theme &theme)
             background-color: %7;
             border-bottom: 2px solid %6;
             color: %4;
+            margin-bottom: -2px;
+        }
+        QTabBar::tab:disabled {
+            color: palette(mid);
         }
 
         QTabWidget::pane {
@@ -2121,13 +2162,16 @@ void MainWindow::applyTheme(const Theme &theme)
             top: -1px;
         }
 
+        /* Status bar */
         QStatusBar {
             background-color: %2;
             border-top: 1px solid %3;
             color: palette(mid);
-            padding: 2px 8px;
+            padding: 4px 8px;
+            font-size: 12px;
         }
 
+        /* Menu bar with professional styling */
         QMenuBar {
             background-color: %2;
             border-bottom: 1px solid %3;
@@ -2135,7 +2179,7 @@ void MainWindow::applyTheme(const Theme &theme)
         }
         QMenuBar::item {
             background: transparent;
-            padding: 4px 12px;
+            padding: 6px 12px;
             border-radius: 6px;
             color: %4;
         }
@@ -2143,16 +2187,21 @@ void MainWindow::applyTheme(const Theme &theme)
             background-color: %5;
             color: %4;
         }
+        QMenuBar::item:pressed {
+            background-color: %3;
+        }
 
+        /* Menu styling */
         QMenu {
             background-color: %2;
             border: 1px solid %3;
             border-radius: 8px;
             padding: 4px;
+            margin: 2px;
         }
         QMenu::item {
             background-color: transparent;
-            padding: 6px 24px;
+            padding: 6px 24px 6px 8px;
             border-radius: 4px;
             color: %4;
         }
@@ -2160,15 +2209,25 @@ void MainWindow::applyTheme(const Theme &theme)
             background-color: %6;
             color: %1;
         }
+        QMenu::item:disabled {
+            color: palette(mid);
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: %3;
+            margin: 4px 8px;
+        }
 
+        /* Modern scrollbar styling */
         QScrollBar:vertical {
             background-color: %2;
-            width: 10px;
-            border-radius: 5px;
+            width: 12px;
+            border-radius: 6px;
+            margin: 0px;
         }
         QScrollBar::handle:vertical {
             background-color: %5;
-            border-radius: 5px;
+            border-radius: 6px;
             min-height: 20px;
         }
         QScrollBar::handle:vertical:hover {
@@ -2176,12 +2235,13 @@ void MainWindow::applyTheme(const Theme &theme)
         }
         QScrollBar:horizontal {
             background-color: %2;
-            height: 10px;
-            border-radius: 5px;
+            height: 12px;
+            border-radius: 6px;
+            margin: 0px;
         }
         QScrollBar::handle:horizontal {
             background-color: %5;
-            border-radius: 5px;
+            border-radius: 6px;
             min-width: 20px;
         }
         QScrollBar::handle:horizontal:hover {
@@ -2191,8 +2251,11 @@ void MainWindow::applyTheme(const Theme &theme)
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
             height: 0px;
             width: 0px;
+            border: none;
+            background: transparent;
         }
 
+        /* Checkbox and radio button styling */
         QCheckBox, QRadioButton {
             spacing: 8px;
             color: %4;
@@ -2211,11 +2274,20 @@ void MainWindow::applyTheme(const Theme &theme)
             background-color: %6;
             border: 1px solid %6;
         }
+        QCheckBox:disabled, QRadioButton:disabled {
+            color: palette(mid);
+        }
+        QCheckBox::indicator:disabled, QRadioButton::indicator:disabled {
+            border-color: %3;
+            background-color: %2;
+        }
 
+        /* Toolbar styling */
         QToolBar {
             background-color: %2;
             border: none;
             spacing: 4px;
+            padding: 2px;
         }
 
         QTabBar {
@@ -2223,6 +2295,7 @@ void MainWindow::applyTheme(const Theme &theme)
             border: none;
         }
 
+        /* Container widgets */
         QWidget#bottomPanelContainer {
             background-color: %2;
             border-top: 1px solid %3;
@@ -2248,6 +2321,7 @@ void MainWindow::applyTheme(const Theme &theme)
             border-radius: 12px;
         }
 
+        /* Special buttons */
         QPushButton#projectButton {
             background-color: %2;
             border: 1px solid %3;
@@ -2257,6 +2331,67 @@ void MainWindow::applyTheme(const Theme &theme)
         }
         QPushButton#projectButton:hover {
             background-color: %5;
+        }
+
+        /* Primary buttons for welcome screen */
+        QPushButton#primaryButton {
+            background-color: %6;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            color: %1;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 140px;
+        }
+        QPushButton#primaryButton:hover {
+            background-color: %6;
+            opacity: 0.9;
+        }
+        QPushButton#primaryButton:pressed {
+            background-color: %6;
+            opacity: 0.8;
+        }
+
+        /* Welcome screen title */
+        QLabel#welcomeTitle {
+            color: %4;
+        }
+
+        /* Recent projects frame */
+        QFrame#recentProjectsFrame {
+            background-color: %2;
+            border: 1px solid %3;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        /* Tooltip styling */
+        QToolTip {
+            background-color: %2;
+            color: %4;
+            border: 1px solid %3;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        /* Side bar icon bar */
+        QWidget#sidebarIconBar {
+            background-color: %2;
+            border-top: 1px solid %3;
+            padding: 8px;
+        }
+        
+        /* Focus styling */
+        :focus {
+            outline: none;
+        }
+
+        /* Selection styling */
+        ::selection {
+            background-color: %6;
+            color: %1;
         }
     )")
         .arg(windowColor.name())

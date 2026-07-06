@@ -12,5 +12,7 @@
     <file>resources/icons/theme.svg</file>
     <file>resources/icons/settings.svg</file>
     <file>resources/icons/close.svg</file>
+    <file>resources/icons/check.svg</file>
+    <file>resources/icons/folder.svg</file>
 </qresource>
 </RCC>

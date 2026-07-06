@@ -53,7 +53,7 @@ public:
         setStyleSheet(R"(
             SplashScreen {
                 background-color: white;
-                border: 1px solid palette(mid);
+                border: none;
                 border-radius: 16px;
             }
         )");
@@ -64,7 +64,7 @@ public:
         setStyleSheet(QString(R"(
             SplashScreen {
                 background-color: %1;
-                border: 1px solid palette(mid);
+                border: none;
                 border-radius: 16px;
             }
             QLabel {
