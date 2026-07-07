@@ -92,13 +92,7 @@ See [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md) for detailed instructions on 
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&theme=dark&legend=top-left&sealed_token=gXtlnjgRgPigLyjW4Hv6OAHuBkYh4VixMJDODovYum2_uTx-d80t95ixB2vHbGk5JS28BSv8qI7cYLiE5hLJOJRR_xf9Fg2ZRcx53emSVFQcd4SQIqyQqXZbWVEDh_cfTAQ0ClaBz8Bse578vTN8QzBY" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left&sealed_token=gXtlnjgRgPigLyjW4Hv6OAHuBkYh4VixMJDODovYum2_uTx-d80t95ixB2vHbGk5JS28BSv8qI7cYLiE5hLJOJRR_xf9Fg2ZRcx53emSVFQcd4SQIqyQqXZbWVEDh_cfTAQ0ClaBz8Bse578vTN8QzBY" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left&sealed_token=gXtlnjgRgPigLyjW4Hv6OAHuBkYh4VixMJDODovYum2_uTx-d80t95ixB2vHbGk5JS28BSv8qI7cYLiE5hLJOJRR_xf9Fg2ZRcx53emSVFQcd4SQIqyQqXZbWVEDh_cfTAQ0ClaBz8Bse578vTN8QzBY" />
- </picture>
-</a>
+[![Star History Chart](https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left&sealed_token=gXtlnjgRgPigLyjW4Hv6OAHuBkYh4VixMJDODovYum2_uTx-d80t95ixB2vHbGk5JS28BSv8qI7cYLiE5hLJOJRR_xf9Fg2ZRcx53emSVFQcd4SQIqyQqXZbWVEDh_cfTAQ0ClaBz8Bse578vTN8QzBY)](https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left)
 
 
 ## License
