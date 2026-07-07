@@ -109,5 +109,4 @@ Makefile
 # Windows deployment artifacts
 /deploy/
 /package/
-*.nsi
 Scriptura-Setup.exe
