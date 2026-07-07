@@ -97,6 +97,7 @@ jobs:
           if exist build\Release\plugins xcopy /E /I /Y build\Release\plugins deploy\Release\plugins
           if exist resources xcopy /E /I /Y resources deploy\Release\resources
           copy icon.ico deploy\Release\
+          copy LICENSE deploy\Release\
       
       - name: Build NSIS installer
         run: |
