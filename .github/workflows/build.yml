@@ -80,7 +80,7 @@ jobs:
       
       - name: Convert icon to ICO
         run: |
-          magick icon.png icon.ico
+          magick icon.png -resize 256x256 icon.ico
       
       - name: Deploy Qt dependencies
         run: |
