@@ -88,20 +88,16 @@ jobs:
       
       - name: Package for installer
         run: |
-          mkdir deploy\Release
-          copy build\Release\scriptura.exe deploy\Release\
-          xcopy /E /I /Y build\Release\*.dll deploy\Release\
-          xcopy /E /I /Y build\Release\platforms deploy\Release\
-          xcopy /E /I /Y build\Release\styles deploy\Release\
-          xcopy /E /I /Y build\Release\imageformats deploy\Release\
-          if exist build\Release\plugins (
-              xcopy /E /I /Y build\Release\plugins deploy\Release\plugins
-          )
-          if exist resources (
-              xcopy /E /I /Y resources deploy\Release\resources
-          )
-          copy icon.ico deploy\Release\
-          copy LICENSE deploy\Release\
+          New-Item -ItemType Directory -Force -Path deploy/Release | Out-Null
+          Copy-Item build/Release/scriptura.exe deploy/Release/
+          Copy-Item build/Release/*.dll deploy/Release/
+          Copy-Item -Recurse -Force build/Release/platforms deploy/Release/
+          Copy-Item -Recurse -Force build/Release/styles deploy/Release/
+          Copy-Item -Recurse -Force build/Release/imageformats deploy/Release/
+          if (Test-Path build/Release/plugins) { Copy-Item -Recurse -Force build/Release/plugins deploy/Release/plugins }
+          if (Test-Path resources) { Copy-Item -Recurse -Force resources deploy/Release/resources }
+          Copy-Item icon.ico deploy/Release/
+          Copy-Item LICENSE deploy/Release/
       
       - name: Build NSIS installer
         run: |
