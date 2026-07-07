@@ -1,4 +1,4 @@
-name: Build Scriptura
+uhkuhngbhname: Build Scriptura
 
 on:
   push:
@@ -94,8 +94,12 @@ jobs:
           xcopy /E /I /Y build\Release\platforms deploy\Release\
           xcopy /E /I /Y build\Release\styles deploy\Release\
           xcopy /E /I /Y build\Release\imageformats deploy\Release\
-          if exist build\Release\plugins xcopy /E /I /Y build\Release\plugins deploy\Release\plugins
-          if exist resources xcopy /E /I /Y resources deploy\Release\resources
+          if exist build\Release\plugins (
+              xcopy /E /I /Y build\Release\plugins deploy\Release\plugins
+          )
+          if exist resources (
+              xcopy /E /I /Y resources deploy\Release\resources
+          )
           copy icon.ico deploy\Release\
           copy LICENSE deploy\Release\
       
