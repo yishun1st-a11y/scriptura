@@ -62,8 +62,8 @@ jobs:
           arch: 'win64_msvc2022_64'
           setup-python: 'true'
       
-      - name: Install NSIS
-        run: choco install nsis -y
+      - name: Install NSIS and ImageMagick
+        run: choco install nsis imagemagick -y
       
       - name: Get version from git tag
         id: get_version
@@ -80,7 +80,7 @@ jobs:
       
       - name: Convert icon to ICO
         run: |
-          powershell -ExecutionPolicy Bypass -File convert-icon.ps1 -InputFile "icon.png" -OutputFile "icon.ico"
+          magick icon.png icon.ico
       
       - name: Deploy Qt dependencies
         run: |
