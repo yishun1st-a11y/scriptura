@@ -5,8 +5,6 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  release:
-    types: [ published ]
 
 jobs:
   build-linux:
@@ -125,14 +123,3 @@ jobs:
           name: scriptura-windows-portable
           path: Scriptura-Portable.zip
           retention-days: 14
-      
-      - name: Upload to GitHub Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            Scriptura-Setup.exe
-            Scriptura-Portable.zip
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
