@@ -91,13 +91,8 @@ See [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md) for detailed instructions on 
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left" />
- </picture>
-</a>
+https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left
+
 
 ## License
 
