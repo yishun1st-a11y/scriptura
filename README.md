@@ -89,7 +89,6 @@ For Windows users, pre-built installers are available that bundle all Qt depende
 
 See [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md) for detailed instructions on building the Windows installer locally.
 
-## Star History
 
 ## Star History
 
