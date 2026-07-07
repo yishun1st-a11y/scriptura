@@ -239,7 +239,23 @@ endif()
 
 # Windows NSIS packaging
 if(WIN32)
-    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+    set(CPACK_NSIS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}")
+    set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
+    set(CPACK_NSIS_CONTACT "${CPACK_PACKAGE_CONTACT}")
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA "
+        CreateShortCut \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\${CPACK_PACKAGE_NAME}.lnk\\\" \\\"$INSTDIR\\scriptura.exe\\\"
+        CreateShortCut \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\Uninstall.lnk\\\" \\\"$INSTDIR\\Uninstall.exe\\\"
+    ")
+    set(CPACK_NSIS_DELETE_ICONS_EXTRA "
+        Delete \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\${CPACK_PACKAGE_NAME}.lnk\\\"
+        Delete \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\Uninstall.lnk\\\"
+    ")
+    set(CPACK_NSIS_ENABLE_AUTO_DIRECTORY true)
+    set(CPACK_NSIS_MODIFY_PATH "ON")
 endif()
 
 include(CPack)

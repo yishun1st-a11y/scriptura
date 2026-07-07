@@ -5,50 +5,20 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  release:
+    types: [ published ]
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -j$(nproc)
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: scriptura-linux
-          path: build/scriptura
-          retention-days: 14
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt
-        run: brew install qt
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
-      - name: Build
-        run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: scriptura-macos
-          path: build/scriptura.app
-          retention-days: 14
-
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
+      
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -57,13 +27,76 @@ jobs:
           target: 'desktop'
           arch: 'win64_msvc2022_64'
           setup-python: 'true'
+      
+      - name: Install NSIS
+        run: choco install nsis -y
+      
+      - name: Get version from git tag
+        id: get_version
+        run: |
+          $version = git describe --tags --always
+          if ($version -eq "") { $version = "0.0.0-dev" }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+      
       - name: Configure (MSVC)
         run: cmake -B build -S . -A x64 -DCMAKE_BUILD_TYPE=Release
+      
       - name: Build
         run: cmake --build build --config Release -j
-      - name: Upload Windows artifact
+      
+      - name: Convert icon to ICO
+        run: |
+          powershell -ExecutionPolicy Bypass -File convert-icon.ps1 -InputFile "icon.png" -OutputFile "icon.ico"
+      
+      - name: Deploy Qt dependencies
+        run: |
+          windeployqt --release --no-translations --no-system-d3d-compiler --no-opengl-sw build/Release/scriptura.exe
+      
+      - name: Package for installer
+        run: |
+          mkdir deploy\Release
+          copy build\Release\scriptura.exe deploy\Release\
+          xcopy /E /I /Y build\Release\*.dll deploy\Release\
+          xcopy /E /I /Y build\Release\platforms deploy\Release\
+          xcopy /E /I /Y build\Release\styles deploy\Release\
+          xcopy /E /I /Y build\Release\imageformats deploy\Release\
+          if exist build\Release\plugins xcopy /E /I /Y build\Release\plugins deploy\Release\plugins
+          if exist resources xcopy /E /I /Y resources deploy\Release\resources
+          copy icon.ico deploy\Release\
+      
+      - name: Build NSIS installer
+        run: |
+          cd deploy\Release
+          $nsiContent = Get-Content ..\..\scriptura.nsi
+          $nsiContent = $nsiContent -replace '0\.0\.0-dev', '${{ steps.get_version.outputs.VERSION }}'
+          Set-Content scriptura-temp.nsi $nsiContent
+          makensis scriptura-temp.nsi
+      
+      - name: Create portable ZIP
+        run: |
+          Compress-Archive -Path deploy\Release\* -DestinationPath Scriptura-Portable.zip
+      
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: scriptura-windows
-          path: build/Release/scriptura.exe
+          name: scriptura-windows-installer
+          path: Scriptura-Setup.exe
           retention-days: 14
+      
+      - name: Upload Windows portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: scriptura-windows-portable
+          path: Scriptura-Portable.zip
+          retention-days: 14
+      
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Scriptura-Setup.exe
+            Scriptura-Portable.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

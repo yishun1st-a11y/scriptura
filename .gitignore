@@ -105,3 +105,9 @@ Makefile
 .qtc/
 .qtc_clangd/
 .qtcreator/
+
+# Windows deployment artifacts
+/deploy/
+/package/
+*.nsi
+Scriptura-Setup.exe

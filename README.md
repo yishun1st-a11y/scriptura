@@ -70,10 +70,24 @@ Or directly:
 
 - [How to Develop a Plugin](docs/how-to-develop-a-plugin.md)
 - [How to Install a Plugin](docs/how-to-install-a-plugin.md)
+- [Windows Deployment Guide](WINDOWS_DEPLOYMENT.md)
 
 ## CI/CD
 
 Automated builds are available for Linux, macOS, and Windows via GitHub Actions. See `.github/workflows/build.yml` for the workflow configuration.
+
+## Windows Installer
+
+For Windows users, pre-built installers are available that bundle all Qt dependencies, so no manual Qt installation is required. The installer:
+
+- Includes all necessary Qt DLLs and plugins
+- Installs to Program Files by default
+- Creates Start Menu shortcuts
+- Supports automatic updates and uninstallation
+
+### Building the Windows Installer
+
+See [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md) for detailed instructions on building the Windows installer locally.
 
 ## Star History
 
