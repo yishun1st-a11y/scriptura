@@ -102,7 +102,7 @@ jobs:
       - name: Build NSIS installer
         run: |
           cd deploy\Release
-          $nsiContent = Get-Content ..\..\scriptura.nsi
+          $nsiContent = Get-Content "$env:GITHUB_WORKSPACE\scriptura.nsi"
           $nsiContent = $nsiContent -replace '0\.0\.0-dev', '${{ steps.get_version.outputs.VERSION }}'
           Set-Content scriptura-temp.nsi $nsiContent
           makensis scriptura-temp.nsi
