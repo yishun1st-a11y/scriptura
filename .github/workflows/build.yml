@@ -1,4 +1,4 @@
-uhkuhngbhname: Build Scriptura
+name: Build Scriptura
 
 on:
   push:
