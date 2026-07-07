@@ -9,7 +9,7 @@
 
 | # | Feature / Control | Expected Behavior | Linux ✓ | Linux ✗ | macOS ✓ | macOS ✗ | Windows ✓ | Windows ✗ | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| 1.1 | Launch `scriptura` | Starts without crash; shows Welcome screen | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 1.1 | Launch `scriptura` | Starts without crash; shows Welcome screen | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | 1.2 | Launch with `--help` / invalid arg | Prints usage or handles gracefully | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | 1.3 | Window resize | Resizes editor, sidebar, and bottom panel proportionally | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | 1.4 | Window maximize | All panels fill screen; state restored on reopen | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
