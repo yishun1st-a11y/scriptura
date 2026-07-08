@@ -2029,12 +2029,12 @@ void MainWindow::applyTheme(const Theme &theme)
         QToolButton {
             background-color: transparent;
             border: 1px solid transparent;
-            border-radius: 8px;
-            padding: 8px;
+            border-radius: 4px;
+            padding: 2px;
             color: %4;
-            min-width: 32px;
-            min-height: 32px;
-            margin: 2px;
+            min-width: 24px;
+            min-height: 24px;
+            margin: 0px;
         }
         QToolButton:hover {
             background-color: %5;
@@ -2056,12 +2056,12 @@ void MainWindow::applyTheme(const Theme &theme)
         QPushButton {
             background-color: %2;
             border: 1px solid %3;
-            border-radius: 8px;
-            padding: 8px 16px;
+            border-radius: 4px;
+            padding: 4px 10px;
             color: %4;
             font-weight: 500;
-            min-height: 36px;
-            min-width: 80px;
+            min-height: 28px;
+            min-width: 64px;
         }
         QPushButton:hover {
             background-color: %5;

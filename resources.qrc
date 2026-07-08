@@ -14,5 +14,18 @@
     <file>resources/icons/close.svg</file>
     <file>resources/icons/check.svg</file>
     <file>resources/icons/folder.svg</file>
+    <file alias="icons/app-icon.svg">resources/icons/app-icon.svg</file>
+    <file alias="icons/sidebar-toggle.svg">resources/icons/sidebar-toggle.svg</file>
+    <file alias="icons/go-up.svg">resources/icons/go-up.svg</file>
+    <file alias="icons/file-tree.svg">resources/icons/file-tree.svg</file>
+    <file alias="icons/todo.svg">resources/icons/todo.svg</file>
+    <file alias="icons/terminal.svg">resources/icons/terminal.svg</file>
+    <file alias="icons/problems.svg">resources/icons/problems.svg</file>
+    <file alias="icons/git.svg">resources/icons/git.svg</file>
+    <file alias="icons/theme.svg">resources/icons/theme.svg</file>
+    <file alias="icons/settings.svg">resources/icons/settings.svg</file>
+    <file alias="icons/close.svg">resources/icons/close.svg</file>
+    <file alias="icons/check.svg">resources/icons/check.svg</file>
+    <file alias="icons/folder.svg">resources/icons/folder.svg</file>
 </qresource>
 </RCC>
