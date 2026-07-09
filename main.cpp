@@ -74,12 +74,15 @@ int main(int argc, char *argv[])
 
     QApplication a(argc, argv);
 
+    a.setWindowIcon(QIcon(":/icon.png"));
+
     a.setStyleSheet(R"(
 /* Modern Professional IDE Styling */
 
 /* Base styling for all widgets */
 QMainWindow, QWidget {
     background-color: palette(window);
+    font-family: "DejaVu Sans Mono", "Consolas", "Courier New", monospace;
 }
 
 /* Group boxes with modern styling */

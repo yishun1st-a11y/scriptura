@@ -678,18 +678,19 @@ QPushButton* MainWindow::createTabCloseButton(int tabIndex)
 QWidget* MainWindow::createKeyboardShortcutsWidget()
 {
     QWidget *widget = new QWidget(this);
-    QHBoxLayout *layout = new QHBoxLayout(widget);
+    QVBoxLayout *layout = new QVBoxLayout(widget);
+    layout->setAlignment(Qt::AlignCenter);
 
     QLabel *shortcutsLabel = new QLabel(tr(
         "<b>Keyboard Shortcuts:</b><br>"
-        "Ctrl+S: Save &nbsp;&nbsp; "
-        "Ctrl+Shift+S: Save As &nbsp;&nbsp; "
-        "Ctrl+Z: Undo &nbsp;&nbsp; "
-        "Ctrl+Y: Redo &nbsp;&nbsp; "
-        "Ctrl+F: Find &nbsp;&nbsp; "
-        "Ctrl+H: Replace &nbsp;&nbsp; "
-        "Ctrl+G: Find Next &nbsp;&nbsp; "
-        "Ctrl+Shift+P: Command Palette &nbsp;&nbsp; "
+        "Ctrl+S: Save<br>"
+        "Ctrl+Shift+S: Save As<br>"
+        "Ctrl+Z: Undo<br>"
+        "Ctrl+Y: Redo<br>"
+        "Ctrl+F: Find<br>"
+        "Ctrl+H: Replace<br>"
+        "Ctrl+G: Find Next<br>"
+        "Ctrl+Shift+P: Command Palette<br>"
         "Ctrl+K: Keyboard Shortcuts"
     ), widget);
     shortcutsLabel->setAlignment(Qt::AlignCenter);
