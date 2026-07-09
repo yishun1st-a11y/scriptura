@@ -22,13 +22,13 @@
 ## 2. Menu Bar — File
 
 | # | Feature / Control | Expected Behavior | Linux ✓ | Linux ✗ | macOS ✓ | macOS ✗ | Windows ✓ | Windows ✗ | Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| 2.1 | Open Project (`Ctrl+O`) | Opens folder picker; loads directory tree into sidebar | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 2.2 | Open File | Opens file picker; opens file in new editor tab | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 2.3 | Save (`Ctrl+S`) | Saves current file; clears modified indicator | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 2.4 | Save As (`Ctrl+Shift+S`) | Opens save dialog; writes to new path; updates tab title | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 2.5 | Add File/Directory | Context menu in file tree; creates file or folder | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 2.6 | Delete File/Directory | Deletes selected path; refreshes tree; confirmation dialog | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | |
+|---|---|---|---------|---|---|---|---|---|---|
+| 2.1 | Open Project (`Ctrl+O`) | Opens folder picker; loads directory tree into sidebar | [x]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 2.2 | Open File | Opens file picker; opens file in new editor tab | [ ]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 2.3 | Save (`Ctrl+S`) | Saves current file; clears modified indicator | [ ]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 2.4 | Save As (`Ctrl+Shift+S`) | Opens save dialog; writes to new path; updates tab title | [ ]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 2.5 | Add File/Directory | Context menu in file tree; creates file or folder | [ ]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 2.6 | Delete File/Directory | Deletes selected path; refreshes tree; confirmation dialog | [ ]     | [ ] | [ ] | [ ] | [ ] | [ ] | |
 
 ---
 
