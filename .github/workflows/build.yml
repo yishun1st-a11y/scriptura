@@ -105,7 +105,7 @@ jobs:
           $nsiContent = Get-Content "$env:GITHUB_WORKSPACE\scriptura.nsi"
           $nsiContent = $nsiContent -replace '0\.0\.0-dev', '${{ steps.get_version.outputs.VERSION }}'
           Set-Content scriptura-temp.nsi $nsiContent
-          & 'C:\Program Files (x86)\NSIS\makensis.exe' scriptura-temp.nsi
+          & 'C:\Program Files\NSIS\makensis.exe' scriptura-temp.nsi
       
       - name: Create portable ZIP
         run: |
