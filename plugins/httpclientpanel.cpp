@@ -185,8 +185,14 @@ void HttpClientPanel::onUrlReturnPressed()
 
 void HttpClientPanel::onReplyFinished()
 {
-    if (!m_currentReply)
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply)
         return;
+    if (reply != m_currentReply) {
+        // Stale/aborted reply (e.g. superseded by a newer request). Ignore it.
+        reply->deleteLater();
+        return;
+    }
 
     RequestState state;
     state.httpMajor = 1;

@@ -21,7 +21,6 @@ SqliteViewerPanel::SqliteViewerPanel(QWidget *parent)
     , m_openButton(new QPushButton(tr("Open SQLite..."), this))
     , m_refreshButton(new QPushButton(tr("Refresh"), this))
     , m_statusLabel(new QLineEdit(this))
-    , m_db(nullptr)
 {
     m_tableList->setHeaderLabels({tr("Tables")});
     m_tableList->setColumnCount(1);
@@ -62,8 +61,8 @@ SqliteViewerPanel::SqliteViewerPanel(QWidget *parent)
 
 SqliteViewerPanel::~SqliteViewerPanel()
 {
-    if (m_db) {
-        QSqlDatabase db = QSqlDatabase::database("sqliteviewer");
+    QSqlDatabase db = QSqlDatabase::database("sqliteviewer", false);
+    if (db.isValid()) {
         if (db.isOpen())
             db.close();
         QSqlDatabase::removeDatabase("sqliteviewer");
@@ -111,7 +110,9 @@ void SqliteViewerPanel::onQueryReturnPressed()
 
 bool SqliteViewerPanel::openDatabase(const QString &filePath)
 {
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "sqliteviewer");
+    if (!QSqlDatabase::contains("sqliteviewer"))
+        QSqlDatabase::addDatabase("QSQLITE", "sqliteviewer");
+    QSqlDatabase db = QSqlDatabase::database("sqliteviewer");
     db.setDatabaseName(filePath);
     if (!db.open()) {
         showError(db.lastError().text());

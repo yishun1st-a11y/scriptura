@@ -41,7 +41,6 @@ private:
     QPushButton *m_refreshButton;
     QLineEdit *m_statusLabel;
     QString m_dbFile;
-    void *m_db;
 };
 
 #endif // SQLITEVIEWER_H

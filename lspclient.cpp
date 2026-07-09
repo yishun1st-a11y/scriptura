@@ -394,8 +394,10 @@ void LspClient::processMessage(const QByteArray &data)
     if (doc.isObject()) {
         QJsonObject obj = doc.object();
         if (obj.contains("id")) {
-            // Response to our request
-            QMutexLocker locker(&m_mutex);
+            // Response to our request.
+            // NOTE: handleResponse() already locks m_mutex internally; do NOT
+            // lock it here too, otherwise we self-deadlock on this non-recursive
+            // mutex (the GUI thread would freeze on the first LSP response).
             handleResponse(obj);
         } else if (obj.contains("method")) {
             // Notification from server (e.g., textDocument/publishDiagnostics)
