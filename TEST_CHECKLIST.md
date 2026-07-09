@@ -8,14 +8,14 @@
 ## 1. Application Lifecycle
 
 | # | Feature / Control | Expected Behavior | Linux ✓ | Linux ✗ | macOS ✓ | macOS ✗ | Windows ✓ | Windows ✗ | Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| 1.1 | Launch `scriptura` | Starts without crash; shows Welcome screen | [x] | [ ] | [ ] | [ ] | [x] | [ ] | |
-| 1.2 | Launch with `--help` / invalid arg | Prints usage or handles gracefully | won't repo | | | | | | |
-| 1.3 | Window resize | Resizes editor, sidebar, and bottom panel proportionally | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 1.4 | Window maximize | All panels fill screen; state restored on reopen | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 1.5 | Window close (Ctrl+W / X button) | Prompts to save modified files; exits cleanly | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Ctrl+W wired in mainwindow.cpp |
-| 1.6 | New Window (`menu_terminal -> New Window`) | Spawns second independent Scriptura window | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Fixed: now spawns real Scriptura process |
-| 1.7 | Clone Window (`menu_terminal -> Clone Window`) | Spawns window with same project + open files | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Fixed: passes `--project` + open file paths |
+|---|---|---|---|---|---------|---------|-----------|---|---|
+| 1.1 | Launch `scriptura` | Starts without crash; shows Welcome screen | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | |
+| 1.2 | Launch with `--help` / invalid arg | Prints usage or handles gracefully | won't repo | |         |         |           | | |
+| 1.3 | Window resize | Resizes editor, sidebar, and bottom panel proportionally | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | |
+| 1.4 | Window maximize | All panels fill screen; state restored on reopen | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | |
+| 1.5 | Window close (Ctrl+W / X button) | Prompts to save modified files; exits cleanly | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | Ctrl+W wired in mainwindow.cpp |
+| 1.6 | New Window (`menu_terminal -> New Window`) | Spawns second independent Scriptura window | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | Fixed: now spawns real Scriptura process |
+| 1.7 | Clone Window (`menu_terminal -> Clone Window`) | Spawns window with same project + open files | [x] | [ ] | [ ]     | [ ]     | [x]       | [ ] | Fixed: passes `--project` + open file paths |
 
 ---
 
