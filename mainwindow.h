@@ -122,7 +122,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(const QString &initialProject = QString(), const QStringList &initialFiles = QStringList(), QWidget *parent = nullptr);
     ~MainWindow();
 
     CodeEditor* getCurrentCodeEditor();
@@ -297,6 +297,8 @@ private:
     void onUpdateCheckFailed(const QString &error);
     void showWelcomeScreen();
     void showEditorInterface();
+    void loadProjectDirectory(const QString &dirName);
+    void openFileInTab(const QString &fileName);
     void applyTheme(const Theme &theme);
     void setSidebarCollapsed(bool collapsed);
     void loadRecentProjects();

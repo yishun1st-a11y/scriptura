@@ -61,7 +61,7 @@
 #include <QEasingCurve>
 #include <QAbstractAnimation>
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(const QString &initialProject, const QStringList &initialFiles, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , selectedTheme(ThemeColorFamily::Default, ThemeMode::Light)
@@ -338,7 +338,16 @@ MainWindow::MainWindow(QWidget *parent)
     editorStack->addWidget(todoPanel);
     editorStack->addWidget(terminalPanel);
 
-    showWelcomeScreen();
+    if (!initialProject.isEmpty()) {
+        loadProjectDirectory(initialProject);
+        for (const QString &f : initialFiles) {
+            if (QFile::exists(f))
+                openFileInTab(f);
+        }
+        showEditorInterface();
+    } else {
+        showWelcomeScreen();
+    }
 
     connect(autoSaveTimer, &QTimer::timeout, this, &MainWindow::autoSave);
 
@@ -395,6 +404,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     QShortcut *shortcutToggleBreakpoint = new QShortcut(QKeySequence("F9"), this);
     connect(shortcutToggleBreakpoint, &QShortcut::activated, this, &MainWindow::on_action_toggle_breakpoint_triggered);
+
+    QShortcut *shortcutCloseWindow = new QShortcut(QKeySequence("Ctrl+W"), this);
+    connect(shortcutCloseWindow, &QShortcut::activated, this, &QWidget::close);
 
     QMenu *searchMenu = ui->menubar->addMenu(tr("&Search"));
     QAction *actionFind = searchMenu->addAction(tr("&Find..."));
@@ -1165,14 +1177,19 @@ void MainWindow::on_action_open_project_triggered()
         updateRecentProjectsOnWelcome();
     }
 
+    loadProjectDirectory(dirName);
+}
+
+void MainWindow::loadProjectDirectory(const QString &dirName)
+{
     projectDir = dirName;
-     rootIndex = fileModel->index(projectDir);
-     ui->fileTreeView->setRootIndex(rootIndex);
-     ui->fileTreeView->hideColumn(1);
-     ui->fileTreeView->hideColumn(2);
-     ui->fileTreeView->hideColumn(3);
-     // Disable goUpButton to restrict access to other directories when project is opened
-     goUpButton->setEnabled(false);
+    rootIndex = fileModel->index(projectDir);
+    ui->fileTreeView->setRootIndex(rootIndex);
+    ui->fileTreeView->hideColumn(1);
+    ui->fileTreeView->hideColumn(2);
+    ui->fileTreeView->hideColumn(3);
+    // Disable goUpButton to restrict access to other directories when project is opened
+    goUpButton->setEnabled(false);
 
     autoSaveTimer->start(30000);
 
@@ -1293,6 +1310,11 @@ void MainWindow::on_action_open_file_triggered()
     if (fileName.isEmpty())
         return;
 
+    openFileInTab(fileName);
+}
+
+void MainWindow::openFileInTab(const QString &fileName)
+{
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QString errorMsg;
@@ -1665,13 +1687,17 @@ void MainWindow::goUpClicked()
 
 void MainWindow::on_action_new_window_triggered()
 {
-    // Use internal terminal if available, otherwise fall back to external
-    if (terminalPanel && !terminalPanel->isRunning()) {
-        toggleTerminalPanel();
-    } else {
-        QString term = findTerminal();
-        QProcess::startDetached(term, QStringList());
-    }
+    QProcess::startDetached(QApplication::applicationFilePath(), QStringList());
+}
+
+void MainWindow::on_action_clone_window_triggered()
+{
+    QStringList args;
+    if (!projectDir.isEmpty())
+        args << "--project" << projectDir;
+    for (const OpenFile &f : openFiles)
+        args << f.filePath;
+    QProcess::startDetached(QApplication::applicationFilePath(), args);
 }
 
 void MainWindow::toggleTerminalPanel()
@@ -1922,39 +1948,6 @@ void MainWindow::toggleProblemPanel()
         ui->bottomPanelContainer->hide();
         problemPanel->hide();
     }
-}
-
-void MainWindow::on_action_clone_window_triggered()
-{
-    bool ok;
-    QString defaultDir = !projectDir.isEmpty() ? projectDir : QDir::homePath();
-    QString targetDir = QInputDialog::getText(this, tr("Clone Terminal"), tr("Working directory:"), QLineEdit::Normal, defaultDir, &ok);
-    if (!ok || targetDir.isEmpty())
-        return;
-
-    QDir dir(targetDir);
-    if (!dir.exists())
-        return;
-
-    QString term = findTerminal();
-    QStringList args;
-#ifdef Q_OS_MAC
-    args << "-a" << "Terminal" << targetDir;
-#elif defined(Q_OS_WIN)
-    args << "/k" << "cd" << "/d" << QDir::toNativeSeparators(targetDir);
-#else
-    if (term == "gnome-terminal")
-        args << "--working-directory" << targetDir;
-    else if (term == "konsole")
-        args << "--workdir" << targetDir;
-    else if (term == "xfce4-terminal")
-        args << "--working-directory" << targetDir;
-    else if (term == "alacritty" || term == "kitty")
-        args << "--working-directory" << targetDir;
-    else
-        args << "--working-directory" << targetDir;
-#endif
-    QProcess::startDetached(term, args);
 }
 
 void MainWindow::on_action_about_triggered()

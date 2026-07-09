@@ -13,9 +13,9 @@
 | 1.2 | Launch with `--help` / invalid arg | Prints usage or handles gracefully | won't repo | | | | | | |
 | 1.3 | Window resize | Resizes editor, sidebar, and bottom panel proportionally | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
 | 1.4 | Window maximize | All panels fill screen; state restored on reopen | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 1.5 | Window close (Ctrl+W / X button) | Prompts to save modified files; exits cleanly | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 1.6 | New Window (`menu_terminal -> New Window`) | Spawns second independent Scriptura window | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
-| 1.7 | Clone Window (`menu_terminal -> Clone Window`) | Spawns window with same project + open files | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | |
+| 1.5 | Window close (Ctrl+W / X button) | Prompts to save modified files; exits cleanly | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Ctrl+W wired in mainwindow.cpp |
+| 1.6 | New Window (`menu_terminal -> New Window`) | Spawns second independent Scriptura window | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Fixed: now spawns real Scriptura process |
+| 1.7 | Clone Window (`menu_terminal -> Clone Window`) | Spawns window with same project + open files | [x] | [ ] | [ ] | [ ] | [ ] | [ ] | Fixed: passes `--project` + open file paths |
 
 ---
 
@@ -508,3 +508,5 @@
 | 34.2 | Environment variable substitution | HTTP Client env dropdown was placeholder only | Fixed: `HttpClientPanel::substituteEnvVars()` applies `{{VAR}}` substitution to URL and body on send; defaults seeded with `BASE_URL`, `API_KEY`, `USER_ID` |
 | 34.3 | Plugin Registry manifest | URL was hardcoded to placeholder GitHub path | Fixed: `registryUrl` persisted in QSettings under `plugin/registryUrl`; editable from Updates settings panel |
 | 34.4 | AI provider auth | OpenAI-style auth parsing was missing | Fixed: Bearer token read from `ai/apiKey` QSettings key; `Authorization: Bearer <token>` header sent with every `AiInlineCompletion` request |
+| 34.5 | New/Clone Window | Slots opened an external terminal instead of a Scriptura window | Fixed: `on_action_new_window_triggered` spawns a new `scriptura` process; `on_action_clone_window_triggered` passes `--project <dir>` plus open file paths so the new window clones project + files |
+| 34.6 | Ctrl+W window close | Shortcut was not wired | Fixed: `Ctrl+W` shortcut added in `MainWindow` ctor, triggers `QWidget::close` (same path as X button) |

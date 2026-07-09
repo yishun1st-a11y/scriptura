@@ -9,6 +9,7 @@
 #include <QPalette>
 #include <QColor>
 #include <QTimer>
+#include <QFileInfo>
 
 // Theme helper function to get window color based on theme
 QColor getThemeWindowColor(ThemeColorFamily family, ThemeMode mode) {
@@ -73,6 +74,27 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName("Scriptura");
 
     QApplication a(argc, argv);
+
+    // Parse command-line arguments:
+    //   scriptura [--project <dir>] [file1 file2 ...]
+    // A bare directory argument is treated as the project to open.
+    QString initialProject;
+    QStringList initialFiles;
+    const QStringList cliArgs = a.arguments();
+    for (int i = 1; i < cliArgs.size(); ++i) {
+        const QString &arg = cliArgs.at(i);
+        if (arg == "--project" && i + 1 < cliArgs.size()) {
+            initialProject = cliArgs.at(++i);
+        } else {
+            QFileInfo fi(arg);
+            if (fi.isDir()) {
+                if (initialProject.isEmpty())
+                    initialProject = arg;
+            } else {
+                initialFiles.append(arg);
+            }
+        }
+    }
 
     a.setWindowIcon(QIcon(":/icon.png"));
 
@@ -493,13 +515,13 @@ QSpinBox::down-button:pressed {
     splash->showWithDelay(4000);  // 4 seconds
 
     // Timer to create and show main window after splash screen duration
-    QTimer::singleShot(4000, [splash]() {
+    QTimer::singleShot(4000, [splash, initialProject, initialFiles]() {
         // Close splash screen
         splash->close();
         splash->deleteLater();
         
         // Create and show main window
-        MainWindow *mainWindow = new MainWindow;
+        MainWindow *mainWindow = new MainWindow(initialProject, initialFiles);
         mainWindow->show();
     });
 
