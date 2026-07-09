@@ -105,7 +105,9 @@ jobs:
           $nsiContent = Get-Content "$env:GITHUB_WORKSPACE\scriptura.nsi"
           $nsiContent = $nsiContent -replace '0\.0\.0-dev', '${{ steps.get_version.outputs.VERSION }}'
           Set-Content scriptura-temp.nsi $nsiContent
-          & 'C:\Program Files\NSIS\makensis.exe' scriptura-temp.nsi
+          $makensis = Get-ChildItem 'C:\Program Files','C:\Program Files (x86)' -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $makensis) { throw "makensis.exe not found under C:\Program Files*" }
+          & $makensis.FullName scriptura-temp.nsi
       
       - name: Create portable ZIP
         run: |
@@ -115,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scriptura-windows-installer
-          path: Scriptura-Setup.exe
+          path: deploy/Release/Scriptura-Setup.exe
           retention-days: 14
       
       - name: Upload Windows portable
