@@ -12,7 +12,7 @@ endif()
 
 # 產生 version.h
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/version.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/version.h"
 )
 
@@ -26,121 +26,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Network Sql)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Network Sql)
 
-set(TS_FILES scriptura_en_001.ts)
+# Translation files
+file(GLOB TS_FILES "${CMAKE_CURRENT_SOURCE_DIR}/translations/*.ts")
 
+# Main application sources (entry-point + resource file only)
 set(PROJECT_SOURCES
-        main.cpp
-        resources.qrc
+        src/main.cpp
+        src/resources.qrc
 )
 
-set(SCRIPTURA_CORE_SOURCES
-        # UI / Core sources used by both the app and plugins via PluginContext
-        mainwindow.cpp
-        mainwindow.h
-        mainwindow.ui
-        codeeditor.cpp
-        codeeditor.h
-        crashhandler.h
-        crashhandler.cpp
-        lspclient.cpp
-        lspclient.h
-        problempanel.cpp
-        problempanel.h
-        todopanel.cpp
-        todopanel.h
-        gitpanel.cpp
-        gitpanel.h
-        gitdiffwidget.cpp
-        gitdiffwidget.h
-        gitbranchwidget.cpp
-        gitbranchwidget.h
-        gitmergewidget.cpp
-        gitmergewidget.h
-        terminalpanel.cpp
-        terminalpanel.h
-        splashscreen.h
-        resources.qrc
-        updater.cpp
-        updater.h
-        configvalidator.cpp
-        configvalidator.h
-        permission.cpp
-        permission.h
-        pluginmanagerdialog.cpp
-        pluginmanagerdialog.h
-        findreplace.cpp
-        findreplace.h
-        projectsearch.cpp
-        projectsearch.h
-        commandpalette.cpp
-        commandpalette.h
-        # Debugger
-        dapclient.cpp
-        dapclient.h
-        debugpanel.cpp
-        debugpanel.h
-        debugconfiguration.cpp
-        debugconfiguration.h
-        rundialog.cpp
-        rundialog.h
-        # Milestone 1 - Multi-cursor & Column Selection
-        multi-cursor.cpp
-        multi-cursor.h
-        columnselection.cpp
-        columnselection.h
-        # Milestone 4 - Debugger Gutter
-        debuggergutter.cpp
-        debuggergutter.h
-        # Milestone 5 - Workspace & Productivity
-        workspace.cpp
-        workspace.h
-        taskrunner.cpp
-        taskrunner.h
-        # Milestone 6 - UI/UX Polish
-        minimap.cpp
-        minimap.h
-        splitmanager.cpp
-        splitmanager.h
-        breadcrumb.cpp
-        breadcrumb.h
-        # Plugin System
-        pluginfeature.h
-        plugininterface.h
-        plugincontext.h
-        plugincontext.cpp
-        eventbus.h
-        eventbus.cpp
-        servicelocator.h
-        servicelocator.cpp
-        dependencyresolver.h
-        dependencyresolver.cpp
-        pluginmanager.h
-        pluginmanager.cpp
-        pluginsettings.h
-        pluginsettings.cpp
-        pluginupdater.h
-        pluginupdater.cpp
-        plugincrashhandler.h
-        plugincrashhandler.cpp
-        plugincrashhandler.h
-        versionfetcher.h
-        versionfetcher.cpp
-        # AI Inline Completions
-        plugins/aiinlinecompletion.h
-        plugins/aiinlinecompletion.cpp
-        # HTTP Client
-        plugins/httpclientpanel.h
-        plugins/httpclientpanel.cpp
-        # CodeAction UI
-        plugins/codeactionui.h
-        plugins/codeactionui.cpp
-        # SQLite Viewer
-        plugins/sqliteviewer.h
-        plugins/sqliteviewer.cpp
-        # Plugin Registry
-        plugins/pluginregistry.h
-        plugins/pluginregistry.cpp
+# Discover all core library sources under src/ (excluding tests/ and plugins/git/ which has its own CMakeLists.txt)
+file(GLOB_RECURSE SCRIPTURA_CORE_SOURCES
+    "src/*.cpp" "src/*.h" "src/*.ui" "src/*.qrc" "src/*.h.in"
 )
+list(FILTER SCRIPTURA_CORE_SOURCES EXCLUDE REGEX "src/tests/")
+list(FILTER SCRIPTURA_CORE_SOURCES EXCLUDE REGEX "src/plugins/git/")
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(scriptura
@@ -169,8 +69,16 @@ set_target_properties(scriptura_core PROPERTIES
 
 target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::Sql)
 target_include_directories(scriptura_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/services/lsp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/services/dap
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/panels
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/internals
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/plugins
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/scriptura
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -189,8 +97,8 @@ set_target_properties(scriptura PROPERTIES
     QT_PLUGIN_PATH "${PLUGIN_OUTPUT_DIR}"
 )
 
-# Add plugin subdirectories
-add_subdirectory(plugins/git)
+# Add plugin subdirectory (git plugin has its own CMakeLists.txt)
+add_subdirectory(src/plugins/git)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
@@ -213,8 +121,8 @@ install(TARGETS scriptura
 )
 
 # Desktop file for Linux
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/scriptura.desktop")
-    install(FILES scriptura.desktop
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deployment/linux/scriptura.desktop")
+    install(FILES deployment/linux/scriptura.desktop
             DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
     )
 endif()
@@ -244,8 +152,8 @@ if(WIN32)
     set(CPACK_NSIS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}")
     set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
     set(CPACK_NSIS_CONTACT "${CPACK_PACKAGE_CONTACT}")
-    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
-    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/deployment/windows/icon.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/deployment/windows/icon.ico")
     set(CPACK_NSIS_CREATE_ICONS_EXTRA "
         CreateShortCut \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\${CPACK_PACKAGE_NAME}.lnk\\\" \\\"$INSTDIR\\scriptura.exe\\\"
         CreateShortCut \\\"$SMPROGRAMS\\$STARTMENU_FOLDER\\Uninstall.lnk\\\" \\\"$INSTDIR\\Uninstall.exe\\\"
@@ -263,4 +171,3 @@ include(CPack)
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(scriptura)
 endif()
-
