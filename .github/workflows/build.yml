@@ -14,11 +14,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev
+          sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev libqt6test6-dev
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
+      - name: Run unit tests
+        run: cd build && ctest --output-on-failure
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
@@ -36,6 +38,8 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
       - name: Build
         run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+      - name: Run unit tests
+        run: cd build && ctest --output-on-failure
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
@@ -77,6 +81,9 @@ jobs:
       
       - name: Build
         run: cmake --build build --config Release -j
+      
+      - name: Run unit tests
+        run: cd build && ctest --output-on-failure
       
       - name: Convert icon to ICO
         run: |

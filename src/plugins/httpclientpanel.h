@@ -28,10 +28,11 @@ public:
 
     QString currentProjectPath() const { return m_projectPath; }
     void setCurrentProjectPath(const QString &path);
-     QList<QJsonObject> recentRequests() const { return m_recentRequests; }
-     void setEnvVariables(const QJsonObject &envs);
+    void setEnvVariables(const QJsonObject &envs);
+    QString substituteEnvVarsForTest(const QString &input) const { return substituteEnvVars(input); }
+    QList<QJsonObject> recentRequests() const { return m_recentRequests; }
 
- signals:
+signals:
     void requestSent(const QString &url, int statusCode);
     void openFileRequested(const QString &filePath);
 
