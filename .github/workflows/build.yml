@@ -14,18 +14,59 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev libqt6test6-dev
+          sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev libqt6test6-dev wget file
+      - name: Download linuxdeployqt
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
       - name: Run unit tests
         run: cd build && ctest --output-on-failure
-      - name: Upload Linux artifact
+      - name: Bundle Qt dependencies
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp build/scriptura AppDir/usr/bin/
+          cp deployment/linux/scriptura.desktop AppDir/usr/share/applications/ || echo "No desktop file found"
+          cp src/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/scriptura.png || echo "No icon found"
+          ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/*.desktop -appimage -always-overwrite
+      - name: Create .deb package
+        run: |
+          sudo apt-get install -y dpkg fakeroot
+          mkdir -p deb-package/DEBIAN
+          mkdir -p deb-package/usr/bin
+          mkdir -p deb-package/usr/share/applications
+          mkdir -p deb-package/usr/share/icons/hicolor/256x256/apps
+          cp build/scriptura deb-package/usr/bin/
+          cp deployment/linux/scriptura.desktop deb-package/usr/share/applications/ || echo "No desktop file found"
+          cp src/icon.png deb-package/usr/share/icons/hicolor/256x256/apps/scriptura.png || echo "No icon found"
+          cat > deb-package/DEBIAN/control << EOF
+          Package: scriptura
+          Version: 0.0.0-dev
+          Section: editors
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Scriptura <maintainer@example.com>
+          Description: A simple Qt-based text editor with project file browsing
+           Scriptura is a Qt-based text editor with project file browsing capabilities.
+          Depends: libqt6core6t64, libqt6gui6, libqt6widgets6, libqt6network6, libqt6sql6
+          EOF
+          dpkg-deb --build deb-package scriptura.deb
+      - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: scriptura-linux
-          path: build/scriptura
+          name: scriptura-linux-appimage
+          path: Scriptura*.AppImage
+          retention-days: 14
+      - name: Upload Linux .deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: scriptura-linux-deb
+          path: scriptura.deb
           retention-days: 14
 
   build-macos:
@@ -38,6 +79,8 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt
       - name: Build
         run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+      - name: Bundle Qt dependencies
+        run: macdeployqt build/scriptura.app -always-overwrite
       - name: Run unit tests
         run: cd build && ctest --output-on-failure
       - name: Upload macOS artifact
@@ -87,7 +130,7 @@ jobs:
       
       - name: Convert icon to ICO
         run: |
-          magick icon.png -resize 256x256 icon.ico
+          magick src/icon.png -resize 256x256 icon.ico
       
       - name: Deploy Qt dependencies
         run: |
@@ -102,14 +145,14 @@ jobs:
           Copy-Item -Recurse -Force build/Release/styles deploy/Release/
           Copy-Item -Recurse -Force build/Release/imageformats deploy/Release/
           if (Test-Path build/Release/plugins) { Copy-Item -Recurse -Force build/Release/plugins deploy/Release/plugins }
-          if (Test-Path resources) { Copy-Item -Recurse -Force resources deploy/Release/resources }
+          if (Test-Path src/resources) { Copy-Item -Recurse -Force src/resources deploy/Release/resources }
           Copy-Item icon.ico deploy/Release/
           Copy-Item LICENSE deploy/Release/
       
       - name: Build NSIS installer
         run: |
           cd deploy\Release
-          $nsiContent = Get-Content "$env:GITHUB_WORKSPACE\scriptura.nsi"
+          $nsiContent = Get-Content "$env:GITHUB_WORKSPACE\deployment\windows\scriptura.nsi"
           $nsiContent = $nsiContent -replace '0\.0\.0-dev', '${{ steps.get_version.outputs.VERSION }}'
           Set-Content scriptura-temp.nsi $nsiContent
           $makensis = Get-ChildItem 'C:\Program Files','C:\Program Files (x86)' -Recurse -Filter makensis.exe -ErrorAction SilentlyContinue | Select-Object -First 1

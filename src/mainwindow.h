@@ -26,6 +26,7 @@
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QTabBar>
+#include <memory>
 #include "codeeditor.h"
 #include "lspclient.h"
 #include "problempanel.h"
@@ -256,7 +257,7 @@ private:
     // Debugger
     DapClient *dapClient;
     DebugPanel *debugPanel;
-    DebugConfigurationManager *debugConfigManager;
+    std::unique_ptr<DebugConfigurationManager> debugConfigManager;
     bool m_isDebugging;
     int m_currentFrameId = 0;
     QMap<QString, QString> m_breakpointConditions; // key: "file:line"

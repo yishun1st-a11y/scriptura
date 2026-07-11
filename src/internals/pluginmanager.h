@@ -10,6 +10,10 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QVariant>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QSharedPointer>
+#include <memory>
 #include <functional>
 #include "plugininterface.h"
 #include "dependencyresolver.h"
@@ -67,17 +71,17 @@ public:
      */
     bool loadPlugins(const QString& pluginPath);
     
-    /**
-     * @brief 載入單一插件
-     * @param filePath 插件庫檔案路徑
-     * @return 成功載入返回 true
-     */
-    bool loadPlugin(const QString& filePath);
-
-    /**
-     * @brief 取得已安裝插件的版本
-     */
-    QString pluginVersion(const QString& pluginId) const { return m_pluginVersions.value(pluginId); }
+     /**
+      * @brief 載入單一插件
+      * @param filePath 插件庫檔案路徑
+      * @return 成功載入返回 true
+      */
+     bool loadPlugin(const QString& filePath);
+     
+     /**
+      * @brief 取得已安裝插件的版本
+      */
+     QString pluginVersion(const QString& pluginId) const { QMutexLocker locker(&m_mutex); return m_pluginVersions.value(pluginId); }
 
     /**
      * @brief 從下載的壓縮包（zip）安裝插件並熱載入
@@ -300,6 +304,19 @@ private:
     QStringList topologicalSort();
     
     /**
+     * @brief 內部載入實作（不acquire鎖，供已持有鎖的內部呼叫使用）
+     * @param filePath 插件庫檔案路徑
+     * @return 成功載入返回 true
+     */
+    bool loadPluginImpl(const QString& filePath);
+    
+    /**
+     * @brief 內部卸載邏輯（不acquire鎖，供已持有鎖的內部呼叫使用）
+     * @param id 插件 ID
+     */
+    void unloadPluginImpl(const QString& id);
+    
+    /**
      * @brief 根據 ID 載入插件
      * @param pluginId 插件 ID
      * @return 成功載入返回 true
@@ -329,7 +346,7 @@ private:
     struct PluginInfo {
         QString filePath;           ///< 插件目錄路徑
         QJsonObject metadata;       ///< 插件元數據
-        QPluginLoader* loader;        ///< Qt 插件載入器
+        QSharedPointer<QPluginLoader> loader; ///< Qt 插件載入器
         ScripturaPlugin* instance;    ///< 插件實例
         PluginState state;          ///< 插件狀態
         bool initialized;           ///< 是否已初始化
@@ -361,6 +378,7 @@ private:
     DependencyResolver m_resolver;                                  ///< 依賴解析器
     quint64 m_nextSubscriptionId = 1;                               ///< 下一個訂閱 ID
     PluginContext* m_context = nullptr;                             ///< 插件上下文
+    mutable QMutex m_mutex;                                         ///< 執行緒安全鎖
     
     static const QString DISABLED_PLUGINS_FILE;                      ///< 停用插件列表檔案名稱
 };

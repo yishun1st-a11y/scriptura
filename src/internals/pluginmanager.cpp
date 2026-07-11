@@ -15,33 +15,36 @@ PluginManager::PluginManager(QObject* parent)
     : QObject(parent)
     , m_context(nullptr)
 {
+    QMutexLocker locker(&m_mutex);
     loadDisabledPlugins();
 }
 
 PluginManager::~PluginManager()
 {
+    QMutexLocker locker(&m_mutex);
     saveDisabledPlugins();
     unloadAllPlugins();
 }
 
 void PluginManager::setContext(PluginContext* context)
 {
+    QMutexLocker locker(&m_mutex);
     m_context = context;
 }
 
 bool PluginManager::loadPlugins(const QString& pluginPath)
 {
+    QMutexLocker locker(&m_mutex);
+    
     QDir dir(pluginPath);
     if (!dir.exists()) {
         qWarning() << "Plugin directory does not exist:" << pluginPath;
         return false;
     }
     
-    // 設定目錄過濾條件
     dir.setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
     dir.setSorting(QDir::DirsFirst);
     
-    // 第一階段：掃描並載入元數據
     QList<QJsonObject> pluginMetadata;
     for (const QFileInfo& info : dir.entryInfoList()) {
         if (info.isDir()) {
@@ -51,7 +54,6 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
                 if (loadPluginMetadata(info.absoluteFilePath(), metadata)) {
                     QString pluginId = metadata["id"].toString();
                     
-                    // 跳過停用的插件
                     if (m_disabledPlugins.contains(pluginId)) {
                         qDebug() << "Plugin" << pluginId << "is disabled, skipping";
                         continue;
@@ -68,7 +70,6 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第二階段：驗證依賴關係（先做基本驗證，使用空集合因為尚未載入任何插件）
     QList<DependencyResolver::DependencyError> errors = m_resolver.validate(pluginMetadata, QSet<QString>());
     for (const auto& error : errors) {
         if (!error.isOptional) {
@@ -77,12 +78,10 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第三階段：建立依賴圖
     if (!buildDependencyGraph(pluginMetadata)) {
         return false;
     }
     
-    // 第四階段：按依賴順序載入
     QStringList loadOrder = topologicalSort();
     QSet<QString> failedPlugins;
     
@@ -93,10 +92,9 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第五階段：檢查是否有依賴失敗插件的插件，如果有則卸載
     for (const QString& pluginId : loadOrder) {
         if (failedPlugins.contains(pluginId)) {
-            continue;  // 跳過已失敗的
+            continue;
         }
         
         if (m_plugins.contains(pluginId)) {
@@ -104,7 +102,7 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
             for (const QString& dep : info.dependencies) {
                 if (failedPlugins.contains(dep)) {
                     qWarning() << "Skipping plugin" << pluginId << "due to failed dependency:" << dep;
-                    unloadPlugin(pluginId);
+                    unloadPluginImpl(pluginId);
                     failedPlugins.insert(pluginId);
                     break;
                 }
@@ -112,7 +110,6 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第六階段：使用 actuallyLoaded 重新驗證依賴
     QSet<QString> loadedIds;
     for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
         if (it.value().instance) {
@@ -128,13 +125,18 @@ bool PluginManager::loadPlugins(const QString& pluginPath)
         }
     }
     
-    // 第七階段：初始化所有成功載入的插件
     initializePlugins();
     
     return failedPlugins.isEmpty();
 }
 
 bool PluginManager::loadPlugin(const QString& filePath)
+{
+    QMutexLocker locker(&m_mutex);
+    return loadPluginImpl(filePath);
+}
+
+bool PluginManager::loadPluginImpl(const QString& filePath)
 {
     QDir pluginDir(filePath);
     if (!pluginDir.exists()) {
@@ -152,31 +154,23 @@ bool PluginManager::loadPlugin(const QString& filePath)
         return false;
     }
     
-    // 檢查是否已載入
     if (m_plugins.contains(pluginId)) {
         return true;
     }
     
-    // 載入插件
     QString libraryName = metadata["library"].toString();
     if (libraryName.isEmpty()) {
         qWarning() << "Plugin" << pluginId << "has no library specified";
         return false;
     }
     
-    // Handle platform-specific library extensions
     QString libraryPath = pluginDir.absoluteFilePath(libraryName);
     if (!QFile::exists(libraryPath)) {
-        // Try platform-specific extension if the specified one doesn't exist
         QString baseName = libraryName;
-        
-        // Remove existing extension if present
         int lastDot = baseName.lastIndexOf('.');
         if (lastDot > 0) {
             baseName = baseName.left(lastDot);
         }
-        
-        // Try platform-specific extension
         #ifdef Q_OS_WIN
             QString platformLibrary = baseName + ".dll";
         #elif defined(Q_OS_MAC)
@@ -184,37 +178,32 @@ bool PluginManager::loadPlugin(const QString& filePath)
         #else
             QString platformLibrary = baseName + ".so";
         #endif
-        
         libraryPath = pluginDir.absoluteFilePath(platformLibrary);
         qDebug() << "Library not found at" << pluginDir.absoluteFilePath(libraryName) 
                  << ", trying platform-specific:" << libraryPath;
     }
-    QPluginLoader* loader = new QPluginLoader(libraryPath, this);
+    
+    QSharedPointer<QPluginLoader> loader(new QPluginLoader(libraryPath));
     
     QObject* pluginObj = loader->instance();
     if (!pluginObj) {
         qWarning() << "Failed to load plugin library:" << libraryPath 
                    << loader->errorString();
-        delete loader;
         return false;
     }
     
     ScripturaPlugin* plugin = qobject_cast<ScripturaPlugin*>(pluginObj);
     if (!plugin) {
         qWarning() << "Plugin does not implement ScripturaPlugin interface:" << pluginId;
-        delete loader;
         return false;
     }
     
-    // 檢查版本相容性
     if (!checkVersionCompatibility(metadata)) {
         qWarning() << "Plugin" << pluginId << "is not compatible with current Scriptura version";
         emit pluginIncompatible(pluginId, VersionFetcher::coreVersion());
-        delete loader;
         return false;
     }
     
-    // 儲存插件資訊
     PluginInfo info;
     info.filePath = filePath;
     info.metadata = metadata;
@@ -230,8 +219,6 @@ bool PluginManager::loadPlugin(const QString& filePath)
     }
     
     m_plugins[pluginId] = info;
-    
-    // 發佈事件
     emit pluginLoaded(pluginId);
     
     return true;
@@ -239,13 +226,19 @@ bool PluginManager::loadPlugin(const QString& filePath)
 
 void PluginManager::unloadPlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
+    unloadPluginImpl(id);
+    emit pluginUnloaded(id);
+}
+
+void PluginManager::unloadPluginImpl(const QString& id)
+{
     if (!m_plugins.contains(id)) {
         return;
     }
     
     PluginInfo& info = m_plugins[id];
     
-    // 執行 shutdown
     if (info.instance && info.initialized) {
         try {
             info.instance->shutdown();
@@ -254,26 +247,27 @@ void PluginManager::unloadPlugin(const QString& id)
         }
     }
     
-    // 卸載插件
     if (info.loader) {
         info.loader->unload();
+        info.loader.reset();
     }
     
     m_plugins.remove(id);
-    emit pluginUnloaded(id);
 }
 
 void PluginManager::unloadAllPlugins()
 {
-    // 反向卸載 (後載入的先卸載)
+    QMutexLocker locker(&m_mutex);
     QStringList ids = m_plugins.keys();
     for (int i = ids.size() - 1; i >= 0; --i) {
-        unloadPlugin(ids[i]);
+        unloadPluginImpl(ids[i]);
+        emit pluginUnloaded(ids[i]);
     }
 }
 
 QList<ScripturaPlugin*> PluginManager::plugins() const
 {
+    QMutexLocker locker(&m_mutex);
     QList<ScripturaPlugin*> result;
     for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
         if (it.value().instance) {
@@ -285,6 +279,7 @@ QList<ScripturaPlugin*> PluginManager::plugins() const
 
 ScripturaPlugin* PluginManager::getPlugin(const QString& id) const
 {
+    QMutexLocker locker(&m_mutex);
     if (!m_plugins.contains(id)) {
         return nullptr;
     }
@@ -293,11 +288,13 @@ ScripturaPlugin* PluginManager::getPlugin(const QString& id) const
 
 bool PluginManager::isLoaded(const QString& id) const
 {
+    QMutexLocker locker(&m_mutex);
     return m_plugins.contains(id) && m_plugins[id].initialized;
 }
 
 QList<ScripturaPlugin*> PluginManager::pluginsWithFeature(PluginFeature feature) const
 {
+    QMutexLocker locker(&m_mutex);
     QList<ScripturaPlugin*> result;
     for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
         if (it.value().instance && it.value().instance->hasFeature(feature)) {
@@ -309,25 +306,34 @@ QList<ScripturaPlugin*> PluginManager::pluginsWithFeature(PluginFeature feature)
 
 void PluginManager::publishEvent(const QString& event, const QVariant& data)
 {
-    if (m_eventHandlers.contains(event)) {
-        for (const auto& subscription : m_eventHandlers[event]) {
-            try {
-                subscription.callback(data);
-            } catch (const std::exception& e) {
-                qWarning() << "Exception in event handler for" << event << ":" << e.what();
+    QList<std::function<void(const QVariant&)>> callbacks;
+    
+    {
+        QMutexLocker locker(&m_mutex);
+        if (m_eventHandlers.contains(event)) {
+            for (const auto& subscription : m_eventHandlers[event]) {
+                callbacks.append(subscription.callback);
             }
         }
     }
     
-    // 同時發佈到 EventBus
+    for (const auto& callback : callbacks) {
+        try {
+            callback(data);
+        } catch (const std::exception& e) {
+            qWarning() << "Exception in event handler for" << event << ":" << e.what();
+        }
+    }
+    
     EventBus::instance()->publish(event, data);
 }
 
 quint64 PluginManager::subscribeToEvent(const QString& event, 
                                          std::function<void(const QVariant&)> callback)
 {
+    QMutexLocker locker(&m_mutex);
     quint64 id = m_nextSubscriptionId++;
-    m_eventHandlers[event].append({id, callback});
+    m_eventHandlers[event].append({id, std::move(callback)});
     return id;
 }
 
@@ -363,6 +369,7 @@ bool PluginManager::loadPluginMetadata(const QString& filePath, QJsonObject& met
 
 bool PluginManager::checkDependencies(const QJsonObject& metadata)
 {
+    QMutexLocker locker(&m_mutex);
     if (!metadata.contains("dependencies")) {
         return true;
     }
@@ -386,6 +393,7 @@ bool PluginManager::resolveDependencies()
 
 void PluginManager::initializePlugins()
 {
+    QMutexLocker locker(&m_mutex);
     for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it) {
         if (it->instance && !it->initialized) {
             if (m_context) {
@@ -419,6 +427,7 @@ void PluginManager::setupPluginConnections(ScripturaPlugin* plugin)
 
 bool PluginManager::buildDependencyGraph(const QList<QJsonObject>& pluginMetadata)
 {
+    QMutexLocker locker(&m_mutex);
     m_dependencyGraph.clear();
     
     for (const QJsonObject& metadata : pluginMetadata) {
@@ -443,7 +452,7 @@ bool PluginManager::buildDependencyGraph(const QList<QJsonObject>& pluginMetadat
 
 QStringList PluginManager::topologicalSort()
 {
-    // 將依賴圖轉換為 QJsonObject 列表
+    QMutexLocker locker(&m_mutex);
     QList<QJsonObject> plugins;
     for (const QString& id : m_dependencyGraph.keys()) {
         QJsonObject obj;
@@ -471,7 +480,7 @@ bool PluginManager::loadPluginById(const QString& pluginId)
     }
     
     if (m_pluginPaths.contains(pluginId)) {
-        return loadPlugin(m_pluginPaths[pluginId]);
+        return loadPluginImpl(m_pluginPaths[pluginId]);
     }
     
     qWarning() << "Plugin path not found for:" << pluginId;
@@ -480,21 +489,25 @@ bool PluginManager::loadPluginById(const QString& pluginId)
 
 void PluginManager::setAllowedPlugins(const QSet<QString>& allowed)
 {
+    QMutexLocker locker(&m_mutex);
     m_allowedPlugins = allowed;
 }
 
 void PluginManager::addAllowedPlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
     m_allowedPlugins.insert(id);
 }
 
 void PluginManager::removeAllowedPlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
     m_allowedPlugins.remove(id);
 }
 
 bool PluginManager::isAllowed(const QString& id) const
 {
+    QMutexLocker locker(&m_mutex);
     if (m_allowedPlugins.isEmpty()) {
         return true;
     }
@@ -503,6 +516,7 @@ bool PluginManager::isAllowed(const QString& id) const
 
 QSet<QString> PluginManager::allowedPlugins() const
 {
+    QMutexLocker locker(&m_mutex);
     return m_allowedPlugins;
 }
 
@@ -524,6 +538,7 @@ bool PluginManager::checkVersionCompatibility(const QJsonObject& metadata) const
 
 bool PluginManager::disablePlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
     if (!m_plugins.contains(id)) {
         return false;
     }
@@ -533,7 +548,6 @@ bool PluginManager::disablePlugin(const QString& id)
         return true;
     }
     
-    // 執行 shutdown
     if (info.instance && info.initialized) {
         try {
             info.instance->shutdown();
@@ -542,11 +556,9 @@ bool PluginManager::disablePlugin(const QString& id)
         }
     }
     
-    // 卸載插件
     if (info.loader) {
         info.loader->unload();
-        delete info.loader;
-        info.loader = nullptr;
+        info.loader.reset();
     }
     
     info.instance = nullptr;
@@ -562,6 +574,7 @@ bool PluginManager::disablePlugin(const QString& id)
 
 bool PluginManager::enablePlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
     if (!m_disabledPlugins.contains(id)) {
         return false;
     }
@@ -569,9 +582,8 @@ bool PluginManager::enablePlugin(const QString& id)
     m_disabledPlugins.remove(id);
     saveDisabledPlugins();
     
-    // 嘗試重新載入
     if (m_pluginPaths.contains(id)) {
-        return loadPlugin(m_pluginPaths[id]);
+        return loadPluginImpl(m_pluginPaths[id]);
     }
     
     return false;
@@ -579,22 +591,20 @@ bool PluginManager::enablePlugin(const QString& id)
 
 bool PluginManager::reloadPlugin(const QString& id)
 {
+    QMutexLocker locker(&m_mutex);
     if (!m_plugins.contains(id)) {
         return false;
     }
     
-    // 先停用
     if (!disablePlugin(id)) {
         return false;
     }
     
-    // 從停用列表中移除
     m_disabledPlugins.remove(id);
     saveDisabledPlugins();
     
-    // 重新載入
     if (m_pluginPaths.contains(id)) {
-        return loadPlugin(m_pluginPaths[id]);
+        return loadPluginImpl(m_pluginPaths[id]);
     }
     
     return false;
@@ -602,16 +612,19 @@ bool PluginManager::reloadPlugin(const QString& id)
 
 bool PluginManager::isDisabled(const QString& id) const
 {
+    QMutexLocker locker(&m_mutex);
     return m_disabledPlugins.contains(id);
 }
 
 QSet<QString> PluginManager::disabledPlugins() const
 {
+    QMutexLocker locker(&m_mutex);
     return m_disabledPlugins;
 }
 
 void PluginManager::loadDisabledPlugins()
 {
+    QMutexLocker locker(&m_mutex);
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QString filePath = configPath + "/" + DISABLED_PLUGINS_FILE;
     
@@ -641,6 +654,7 @@ void PluginManager::loadDisabledPlugins()
 
 void PluginManager::saveDisabledPlugins() const
 {
+    QMutexLocker locker(&m_mutex);
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QDir dir(configPath);
     if (!dir.exists()) {
@@ -671,6 +685,8 @@ QString PluginManager::pluginsInstallDir() const
 
 bool PluginManager::installPluginFromArchive(const QString &pluginId, const QByteArray &archiveData)
 {
+    QMutexLocker locker(&m_mutex);
+    
     if (pluginId.isEmpty() || archiveData.isEmpty())
         return false;
 

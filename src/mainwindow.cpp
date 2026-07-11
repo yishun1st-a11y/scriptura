@@ -85,7 +85,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     , m_previousEditorStackIndex(0)
     , dapClient(new DapClient(this))
     , debugPanel(new DebugPanel(this))
-    , debugConfigManager(new DebugConfigurationManager())
+    , debugConfigManager(std::make_unique<DebugConfigurationManager>())
     , m_isDebugging(false)
     , m_workspace(new Workspace(this))
     , m_minimap(nullptr)
@@ -101,9 +101,6 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
 
     pluginManager->setContext(pluginContext);
     
-    QSet<QString> allowed;
-    allowed.insert("com.scriptura.git");
-    pluginManager->setAllowedPlugins(allowed);
     pluginManager->loadPlugins(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/plugins");
     QString builtinPlugins = QCoreApplication::applicationDirPath() + "/plugins";
     pluginManager->loadPlugins(builtinPlugins);
