@@ -19,11 +19,19 @@
 #include "debugpanel.h"
 #include "debugconfiguration.h"
 #include "rundialog.h"
+#include "workspace.h"
+#include "taskrunner.h"
+#include "minimap.h"
+#include "splitmanager.h"
+#include "breadcrumb.h"
 #include "aiinlinecompletion.h"
 #include "httpclientpanel.h"
 #include "codeactionui.h"
 #include "sqliteviewer.h"
 #include "pluginregistry.h"
+#include "customtitlebar.h"
+#include "windowanimator.h"
+#include "thememanager.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -65,6 +73,37 @@
 #include <QPropertyAnimation>
 #include <QEasingCurve>
 #include <QAbstractAnimation>
+#include "customtitlebar.h"
+#include "windowanimator.h"
+#include "thememanager.h"
+
+#ifdef Q_OS_LINUX
+#include <QApplication>
+#include <QWidget>
+#include <QTime>
+#include <QTimer>
+#include <QPainter>
+#include <QDebug>
+#include <QMenu>
+
+// Linux blur support - uses KWin's KWindowEffects if available
+// This provides a blur behind the window similar to Windows Acrylic
+static bool enableLinuxBlur(WId windowId, bool darkMode)
+{
+    // Try KWindowEffects first (KDE/KWin)
+    // This requires linking against KF5WindowEffects or KWindowSystem
+    // For now, we set a property that can be used by window rules
+    if (QApplication *app = qobject_cast<QApplication*>(QApplication::instance())) {
+        app->setProperty("kwin_blur", true);
+        app->setProperty("kwin_blur_region", QRegion());
+        
+        // Also try GTK3/GTK4 client-side decorations if available
+        app->setProperty("gtk_application_prefer_dark_theme", darkMode);
+    }
+    
+    return true;
+}
+#endif
 
 MainWindow::MainWindow(const QString &initialProject, const QStringList &initialFiles, QWidget *parent)
     : QMainWindow(parent)
@@ -98,6 +137,60 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     , m_pluginRegistry(new PluginRegistry(this))
 {
     ui->setupUi(this);
+
+    // Initialize modular UI components
+    m_themeManager = new ThemeManager(this);
+    m_windowAnimator = new WindowAnimator(this);
+    m_titleBar = new CustomTitleBar(this);
+    
+    // Connect title bar signals
+    connect(m_titleBar, &CustomTitleBar::minimizeRequest, this, &MainWindow::showMinimized);
+    connect(m_titleBar, &CustomTitleBar::maximizeRequest, this, [this]() {
+        if (isMaximized()) {
+            showNormal();
+        } else {
+            showMaximized();
+        }
+    });
+    connect(m_titleBar, &CustomTitleBar::closeRequest, this, &QWidget::close);
+    connect(m_titleBar, &CustomTitleBar::menuRequested, this, [this]() {
+        // Create a dropdown menu from the menu bar actions
+        QMenu dropdownMenu(this);
+        dropdownMenu.setObjectName("titleBarMenu");
+        
+        // Add all menu bar actions to the dropdown
+        const QList<QMenu*> menus = ui->menubar->findChildren<QMenu*>();
+        for (QMenu *menu : menus) {
+            if (!menu->title().isEmpty()) {
+                QAction *menuAction = menu->menuAction();
+                if (menuAction) {
+                    dropdownMenu.addAction(menuAction);
+                    dropdownMenu.addSeparator();
+                }
+            }
+        }
+        
+        // Show menu below the button
+        QPoint menuPos = m_titleBar->menuButton->mapToGlobal(QPoint(0, m_titleBar->menuButton->height()));
+        dropdownMenu.exec(menuPos);
+    });
+    
+    // Install title bar as event filter for dragging
+    m_titleBar->installEventFilter(this);
+    
+    // Setup frameless window with custom title bar
+    setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
+    
+    // Add title bar to editor container layout at the top
+    ui->editorContainerLayout->insertWidget(0, m_titleBar);
+    
+    // Apply initial theme through ThemeManager
+    ThemeManager::Theme initialTheme(
+        static_cast<ThemeManager::ColorFamily>(static_cast<int>(selectedTheme.family)),
+        static_cast<ThemeManager::Mode>(static_cast<int>(selectedTheme.mode)),
+        ThemeManager::Features(static_cast<ThemeManager::Feature>(static_cast<int>(selectedTheme.features)))
+    );
+    m_themeManager->applyTheme(initialTheme);
 
     pluginManager->setContext(pluginContext);
     
@@ -185,6 +278,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     sidebarToggleButton->setToolTip(tr("Toggle Sidebar"));
     sidebarToggleButton->setCheckable(true);
     sidebarToggleButton->setChecked(true);
+    sidebarToggleButton->setFixedSize(32, 32);
     ui->topToolbarLayout->addWidget(sidebarToggleButton);
 
     goUpButton = new QToolButton(ui->topToolbar);
@@ -192,6 +286,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     goUpButton->setIconSize(QSize(18, 18));
     goUpButton->setToolTip(tr("Go Up"));
     goUpButton->setEnabled(false);
+    goUpButton->setFixedSize(32, 32);
     ui->topToolbarLayout->addWidget(goUpButton);
 
     ui->topToolbarLayout->addSpacing(8);
@@ -209,16 +304,11 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     debugPanel->hide();
 
     // Right-side toolbar buttons
-    themeButton = new QToolButton(ui->topToolbar);
-    themeButton->setIcon(QIcon(":/icons/theme.svg"));
-    themeButton->setIconSize(QSize(20, 20));
-    themeButton->setToolTip(tr("Theme"));
-    ui->topToolbarLayout->addWidget(themeButton);
-
     settingsButton = new QToolButton(ui->topToolbar);
     settingsButton->setIcon(QIcon(":/icons/settings.svg"));
     settingsButton->setIconSize(QSize(20, 20));
     settingsButton->setToolTip(tr("Editor Settings"));
+    settingsButton->setFixedSize(32, 32);
     ui->topToolbarLayout->addWidget(settingsButton);
 
     // Sidebar icon buttons (bottom of drawer)
@@ -228,6 +318,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     fileTreeToggleButton->setToolTip(tr("File Tree"));
     fileTreeToggleButton->setCheckable(true);
     fileTreeToggleButton->setChecked(true);
+    fileTreeToggleButton->setFixedSize(32, 32);
     ui->sidebarDrawerLayout->addWidget(fileTreeToggleButton);
 
     QWidget *iconBar = new QWidget(ui->sidebarDrawer);
@@ -242,6 +333,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     placeholderButton->setIconSize(QSize(20, 20));
     placeholderButton->setToolTip(tr("Todo"));
     placeholderButton->setCheckable(true);
+    placeholderButton->setFixedSize(32, 32);
     iconBarLayout->addWidget(placeholderButton);
 
     terminalButton = new QToolButton(iconBar);
@@ -249,6 +341,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     terminalButton->setIconSize(QSize(20, 20));
     terminalButton->setToolTip(tr("Terminal"));
     terminalButton->setCheckable(true);
+    terminalButton->setFixedSize(32, 32);
     iconBarLayout->addWidget(terminalButton);
 
     problemsButton = new QToolButton(iconBar);
@@ -256,6 +349,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     problemsButton->setIconSize(QSize(20, 20));
     problemsButton->setToolTip(tr("Problems"));
     problemsButton->setCheckable(true);
+    problemsButton->setFixedSize(32, 32);
     iconBarLayout->addWidget(problemsButton);
 
     gitButton = new QToolButton(iconBar);
@@ -263,6 +357,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     gitButton->setIconSize(QSize(20, 20));
     gitButton->setToolTip(tr("Git"));
     gitButton->setCheckable(true);
+    gitButton->setFixedSize(32, 32);
     iconBarLayout->addWidget(gitButton);
 
     ui->sidebarDrawerLayout->addWidget(iconBar);
@@ -328,8 +423,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     connect(gitPanel, &GitPanel::pullRequested, this, &MainWindow::on_action_git_pull_triggered);
     connect(gitPanel, &GitPanel::fetchRequested, this, &MainWindow::on_action_git_fetch_triggered);
 
-    // Theme and settings buttons
-    connect(themeButton, &QToolButton::clicked, this, &MainWindow::on_action_theme_triggered);
+    // Settings button
     connect(settingsButton, &QToolButton::clicked, this, &MainWindow::on_action_editor_settings_triggered);
 
     // File tree
@@ -966,148 +1060,81 @@ QWidget* MainWindow::createThemeSettingsWidget()
     mainLayout->setSpacing(12);
     mainLayout->setContentsMargins(16, 16, 16, 16);
 
+    QGroupBox *themeGroup = new QGroupBox(tr("Theme"), widget);
+    QGridLayout *themeGrid = new QGridLayout(themeGroup);
+    themeGrid->setSpacing(6);
+    QButtonGroup *themeBtnGroup = new QButtonGroup(themeGroup);
+
     struct FamilyEntry {
         ThemeColorFamily family;
         QString name;
-        QColor lightBg, darkBg;
-        QColor lightText, darkText;
     };
 
     FamilyEntry families[] = {
-        {ThemeColorFamily::Default, "Default", QColor(240,240,240), QColor(45,45,45), Qt::black, Qt::white},
-        {ThemeColorFamily::Blue, "Blue", QColor(240,248,255), QColor(25,35,50), Qt::black, Qt::white},
-        {ThemeColorFamily::Green, "Green", QColor(240,255,240), QColor(25,45,30), Qt::black, Qt::white},
-        {ThemeColorFamily::Red, "Red", QColor(255,245,245), QColor(45,25,25), Qt::black, Qt::white},
-        {ThemeColorFamily::Yellow, "Yellow", QColor(255,255,240), QColor(45,45,25), Qt::black, Qt::white},
-        {ThemeColorFamily::Brown, "Brown", QColor(255,250,240), QColor(40,30,20), Qt::black, Qt::white},
-        {ThemeColorFamily::Cyan, "Cyan", QColor(240,255,255), QColor(25,45,45), Qt::black, Qt::white},
-        {ThemeColorFamily::Violet, "Violet", QColor(245,240,255), QColor(35,25,50), Qt::black, Qt::white}
+        {ThemeColorFamily::Default, "Default"},
+        {ThemeColorFamily::Blue,    "Blue"},
+        {ThemeColorFamily::Green,   "Green"},
+        {ThemeColorFamily::Red,     "Red"},
+        {ThemeColorFamily::Yellow,  "Yellow"},
+        {ThemeColorFamily::Brown,   "Brown"},
+        {ThemeColorFamily::Cyan,    "Cyan"},
+        {ThemeColorFamily::Violet,  "Violet"}
     };
 
-    QGroupBox *familyGroup = new QGroupBox(tr("Color Family"), widget);
-    QGridLayout *familyGrid = new QGridLayout(familyGroup);
-    QButtonGroup *familyBtnGroup = new QButtonGroup(familyGroup);
+    QMap<QPushButton*, Theme> themeMap;
 
-    int familySelected = static_cast<int>(selectedTheme.family);
-    for (int i = 0; i < 8; ++i) {
-        QPushButton *btn = new QPushButton(families[i].name, familyGroup);
-        btn->setCheckable(true);
-        btn->setProperty("familyIdx", i);
-        updateFamilyButtonPreview(btn, families[i].family, selectedTheme.mode, selectedTheme.features);
-        familyGrid->addWidget(btn, i / 4, i % 4);
-        familyBtnGroup->addButton(btn);
-        if (i == familySelected)
-            btn->setChecked(true);
+    int btnIdx = 0;
+    for (int fi = 0; fi < 8; ++fi) {
+        for (int mi = 0; mi < 2; ++mi) {
+            for (int hci = 0; hci < 2; ++hci) {
+                ThemeMode mode = static_cast<ThemeMode>(mi);
+                ThemeFeatures features = hci ? ThemeFeatures(ThemeFeature::HighContrast) : ThemeFeatures();
+                Theme t(static_cast<ThemeColorFamily>(fi), mode, features);
+
+                QString label = families[fi].name + " – " + (mode == ThemeMode::Light ? tr("Light") : tr("Dark"));
+                if (hci)
+                    label += " (" + tr("High Contrast") + ")";
+
+                QPushButton *btn = new QPushButton(label, themeGroup);
+                btn->setCheckable(true);
+                btn->setCursor(Qt::PointingHandCursor);
+
+                QPalette p = buildBasePalette(t.family, t.mode);
+                if (features.testFlag(ThemeFeature::HighContrast))
+                    applyHighContrastPalette(p, t.family, t.mode);
+
+                QColor bg = p.color(QPalette::Window);
+                QColor textColor = p.color(QPalette::WindowText);
+                btn->setStyleSheet(QString("background-color: %1; color: %2; padding: 8px; border: 1px solid %3; border-radius: 4px; text-align: left;")
+                                   .arg(bg.name()).arg(textColor.name()).arg(textColor.name()));
+
+                themeGrid->addWidget(btn, btnIdx / 4, btnIdx % 4);
+                themeBtnGroup->addButton(btn, btnIdx);
+                themeMap.insert(btn, t);
+
+                if (t == selectedTheme)
+                    btn->setChecked(true);
+
+                ++btnIdx;
+            }
+        }
     }
 
-    QGroupBox *modeGroup = new QGroupBox(tr("Mode"), widget);
-    QHBoxLayout *modeLayout = new QHBoxLayout(modeGroup);
-    QRadioButton *lightRadio = new QRadioButton(tr("Light"), modeGroup);
-    QRadioButton *darkRadio = new QRadioButton(tr("Dark"), modeGroup);
-    QButtonGroup *modeBtnGroup = new QButtonGroup(modeGroup);
-    modeBtnGroup->addButton(lightRadio);
-    modeBtnGroup->addButton(darkRadio);
-    modeLayout->addWidget(lightRadio);
-    modeLayout->addWidget(darkRadio);
-    if (selectedTheme.mode == ThemeMode::Light)
-        lightRadio->setChecked(true);
-    else
-        darkRadio->setChecked(true);
-
-    QGroupBox *featuresGroup = new QGroupBox(tr("Features"), widget);
-    QVBoxLayout *featuresLayout = new QVBoxLayout(featuresGroup);
-    QCheckBox *hcCheckbox = new QCheckBox(tr("High Contrast"), featuresGroup);
-    hcCheckbox->setChecked(selectedTheme.features.testFlag(ThemeFeature::HighContrast));
-    featuresLayout->addWidget(hcCheckbox);
-
-    // Preview area
-    QGroupBox *previewGroup = new QGroupBox(tr("Preview"), widget);
-    QVBoxLayout *previewLayout = new QVBoxLayout(previewGroup);
-    QLabel *previewLabel = new QLabel(tr("Sample text with <b>bold</b>, <i>italic</i>, and <a href=\"#\">link</a>."), widget);
-    previewLabel->setWordWrap(true);
-    previewLabel->setTextFormat(Qt::RichText);
-    previewLabel->setOpenExternalLinks(false);
-    previewLayout->addWidget(previewLabel);
-    QPushButton *sampleButton = new QPushButton(tr("Sample Button"), widget);
-    previewLayout->addWidget(sampleButton);
-
-    mainLayout->addWidget(familyGroup);
-    mainLayout->addWidget(modeGroup);
-    mainLayout->addWidget(featuresGroup);
-    mainLayout->addWidget(previewGroup);
+    mainLayout->addWidget(themeGroup);
     mainLayout->addStretch();
 
-    // Apply theme immediately when settings change
-    auto applyCurrentSettings = [&]() {
-        ThemeColorFamily family = static_cast<ThemeColorFamily>(familyBtnGroup->checkedId());
-        if (familyBtnGroup->checkedId() == -1)
-            family = selectedTheme.family;
-        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        ThemeFeatures features;
-        if (hcCheckbox->isChecked())
-            features |= ThemeFeature::HighContrast;
-        
-        Theme newTheme(family, mode, features);
-        if (newTheme != selectedTheme) {
-            selectedTheme = newTheme;
+    connect(themeBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
+        QPushButton *btn = qobject_cast<QPushButton*>(button);
+        if (!btn || !themeMap.contains(btn))
+            return;
+        Theme t = themeMap.value(btn);
+        if (t != selectedTheme) {
+            selectedTheme = t;
             applyTheme(selectedTheme);
+            QSettings settings;
+            settings.setValue("theme/selected", themeToLegacyInt(selectedTheme));
         }
-    };
-
-    auto updatePreview = [&]() {
-        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        ThemeFeatures features;
-        if (hcCheckbox->isChecked())
-            features |= ThemeFeature::HighContrast;
-        
-        ThemeColorFamily family = static_cast<ThemeColorFamily>(familyBtnGroup->checkedId());
-        if (familyBtnGroup->checkedId() == -1)
-            family = selectedTheme.family;
-        
-        QPalette p = buildBasePalette(family, mode);
-        if (features.testFlag(ThemeFeature::HighContrast))
-            applyHighContrastPalette(p, family, mode);
-        
-        previewLabel->setStyleSheet(QString("color: %1; background-color: %2; padding: 8px; border-radius: 4px;")
-                                   .arg(p.color(QPalette::WindowText).name())
-                                   .arg(p.color(QPalette::Base).name()));
-        sampleButton->setStyleSheet(QString("background-color: %1; color: %2; border: 1px solid %2; padding: 6px 12px; border-radius: 4px;")
-                                   .arg(p.color(QPalette::Button).name())
-                                   .arg(p.color(QPalette::ButtonText).name()));
-    };
-
-    auto refreshFamilyPreviews = [&]() {
-        ThemeMode mode = lightRadio->isChecked() ? ThemeMode::Light : ThemeMode::Dark;
-        ThemeFeatures features;
-        if (hcCheckbox->isChecked())
-            features |= ThemeFeature::HighContrast;
-        for (int i = 0; i < 8; ++i) {
-            QAbstractButton *abtn = familyBtnGroup->button(i);
-            QPushButton *btn = qobject_cast<QPushButton*>(abtn);
-            if (btn)
-                updateFamilyButtonPreview(btn, families[i].family, mode, features);
-        }
-    };
-
-    connect(familyBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
-        Q_UNUSED(button);
-        applyCurrentSettings();
-        updatePreview();
     });
-
-    connect(lightRadio, &QRadioButton::toggled, [&]() {
-        refreshFamilyPreviews();
-        updatePreview();
-        applyCurrentSettings();
-    });
-    connect(hcCheckbox, &QCheckBox::toggled, [&]() {
-        refreshFamilyPreviews();
-        updatePreview();
-        applyCurrentSettings();
-    });
-
-    // Initial preview update
-    updatePreview();
 
     return widget;
 }
@@ -1988,33 +2015,19 @@ void MainWindow::toggleTerminalPanel()
 void MainWindow::toggleSidebar()
 {
     if (sidebarToggleButton->isChecked()) {
-        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
-        animation->setDuration(200);
-        animation->setStartValue(ui->sidebarDrawer->width());
-        animation->setEndValue(240);
-        animation->setEasingCurve(QEasingCurve::InOutCubic);
-        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+        if (m_windowAnimator) {
+            m_windowAnimator->animatePanelSlide(ui->sidebarDrawer, true, 200);
+        } else {
+            ui->sidebarDrawer->setMaximumWidth(240);
             ui->sidebarDrawer->setMinimumWidth(48);
-        });
-        animation->start(QAbstractAnimation::DeleteWhenStopped);
-
-        QPropertyAnimation *minAnim = new QPropertyAnimation(ui->sidebarDrawer, "minimumWidth");
-        minAnim->setDuration(200);
-        minAnim->setStartValue(0);
-        minAnim->setEndValue(48);
-        minAnim->setEasingCurve(QEasingCurve::InOutCubic);
-        minAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        }
     } else {
-        QPropertyAnimation *animation = new QPropertyAnimation(ui->sidebarDrawer, "maximumWidth");
-        animation->setDuration(200);
-        animation->setStartValue(ui->sidebarDrawer->width());
-        animation->setEndValue(0);
-        animation->setEasingCurve(QEasingCurve::InOutCubic);
-        connect(animation, &QPropertyAnimation::finished, this, [this]() {
-            ui->sidebarDrawer->setMinimumWidth(0);
+        if (m_windowAnimator) {
+            m_windowAnimator->animatePanelSlide(ui->sidebarDrawer, false, 200);
+        } else {
             ui->sidebarDrawer->setMaximumWidth(0);
-        });
-        animation->start(QAbstractAnimation::DeleteWhenStopped);
+            ui->sidebarDrawer->setMinimumWidth(0);
+        }
     }
 }
 
@@ -2181,10 +2194,14 @@ void MainWindow::toggleTodoPanel()
 void MainWindow::toggleProblemPanel()
 {
     if (problemsButton->isChecked()) {
-        ui->bottomPanelContainer->show();
         bottomPanelTabs->setCurrentIndex(0);
         bottomPanelStack->setCurrentIndex(0);
         problemPanel->show();
+        if (m_windowAnimator) {
+            m_windowAnimator->animatePanelSlide(ui->bottomPanelContainer, true, 200);
+        } else {
+            ui->bottomPanelContainer->show();
+        }
         if (placeholderButton->isChecked()) {
             QSignalBlocker blocker(placeholderButton);
             placeholderButton->setChecked(false);
@@ -2202,17 +2219,25 @@ void MainWindow::toggleProblemPanel()
             gitPanel->hide();
         }
     } else {
-        ui->bottomPanelContainer->hide();
+        if (m_windowAnimator) {
+            m_windowAnimator->animatePanelSlide(ui->bottomPanelContainer, false, 200);
+        } else {
+            ui->bottomPanelContainer->hide();
+        }
         problemPanel->hide();
     }
 }
 
 void MainWindow::showGitPanel()
 {
-    ui->bottomPanelContainer->show();
     bottomPanelTabs->setCurrentIndex(1);
     bottomPanelStack->setCurrentIndex(1);
     gitPanel->show();
+    if (m_windowAnimator) {
+        m_windowAnimator->animatePanelSlide(ui->bottomPanelContainer, true, 200);
+    } else {
+        ui->bottomPanelContainer->show();
+    }
     QSignalBlocker blocker1(placeholderButton);
     placeholderButton->setChecked(false);
     if (terminalButton->isChecked()) {
@@ -2254,6 +2279,16 @@ void MainWindow::on_action_editor_settings_triggered()
 
 void MainWindow::applyTheme(const Theme &theme)
 {
+    // Delegate base palette and global stylesheet to ThemeManager
+    ThemeManager::Theme newTheme(
+        static_cast<ThemeManager::ColorFamily>(static_cast<int>(theme.family)),
+        static_cast<ThemeManager::Mode>(static_cast<int>(theme.mode)),
+        ThemeManager::Features(static_cast<ThemeManager::Feature>(static_cast<int>(theme.features)))
+    );
+    if (m_themeManager) {
+        m_themeManager->setCurrentTheme(newTheme);
+    }
+    
     QPalette palette = buildBasePalette(theme.family, theme.mode);
     bool isDark = theme.isDark();
     auto syntax = baseSyntaxColors(theme.mode);
@@ -2304,7 +2339,6 @@ void MainWindow::applyTheme(const Theme &theme)
             border: 1px solid transparent;
             border-radius: 4px;
             padding: 2px;
-            color: %4;
             min-width: 24px;
             min-height: 24px;
             margin: 0px;
@@ -3365,6 +3399,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         return QMainWindow::eventFilter(watched, event);
     }
 
+    // Handle title bar dragging via CustomTitleBar
+    if (watched == m_titleBar && m_titleBar) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            m_titleBar->handleMousePress(static_cast<QMouseEvent*>(event));
+            return true;
+        } else if (event->type() == QEvent::MouseMove) {
+            m_titleBar->handleMouseMove(static_cast<QMouseEvent*>(event));
+            return true;
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            m_titleBar->stopDrag();
+            return true;
+        }
+    }
+
     // Forward navigation keys to the completion popup when visible
     if (m_completionPopup && m_completionPopup->isVisible() && event->type() == QEvent::KeyPress) {
         QKeyEvent *ke = static_cast<QKeyEvent*>(event);
@@ -3409,6 +3457,51 @@ void MainWindow::closeEvent(QCloseEvent *event)
         event->ignore();
     }
 }
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    
+    // Apply platform-specific backdrop effects after window is shown
+#ifdef Q_OS_WIN
+    if (windowHandle()) {
+        HWND hwnd = reinterpret_cast<HWND>(winId());
+        enableMicaEffect(hwnd, isDarkModeEnabled());
+    }
+#endif
+#ifdef Q_OS_MACOS
+    // macOS vibrancy - requires Objective-C++ for full NSVisualEffectView support
+    // Currently falls back to translucent background
+    setAttribute(Qt::WA_TranslucentBackground, false);
+#endif
+#ifdef Q_OS_LINUX
+    // Linux blur support for KDE/KWin compositor
+    enableLinuxBlur(winId(), isDarkModeEnabled());
+#endif
+}
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+    if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {
+        MSG *msg = static_cast<MSG*>(message);
+        if (msg->message == WM_NCHITTEST) {
+            if (m_titleBar && m_titleBar->isVisible()) {
+                QPoint globalPos(msg->lParam & 0xFFFF, (msg->lParam >> 16) & 0xFFFF);
+                QPoint localPos = m_titleBar->mapFromGlobal(globalPos);
+                if (m_titleBar->rect().contains(localPos)) {
+                    *result = HTCAPTION;
+                    return true;
+                }
+            }
+        }
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
 
 
 void MainWindow::showKeyboardShortcuts()

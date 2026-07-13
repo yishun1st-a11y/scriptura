@@ -48,12 +48,15 @@
 #include "taskrunner.h"
 #include "minimap.h"
 #include "splitmanager.h"
+#include "breadcrumb.h"
 #include "aiinlinecompletion.h"
 #include "httpclientpanel.h"
 #include "codeactionui.h"
 #include "sqliteviewer.h"
 #include "pluginregistry.h"
-#include "breadcrumb.h"
+#include "customtitlebar.h"
+#include "windowanimator.h"
+#include "thememanager.h"
 
 class DapClient;
 class DebugPanel;
@@ -132,12 +135,16 @@ public:
     ProblemPanel* getProblemPanel() const { return problemPanel; }
     TerminalPanel* getTerminalPanel() const { return terminalPanel; }
     GitPanel* getGitPanel() const { return gitPanel; }
+    bool isDarkModeEnabled() const { return selectedTheme.mode == ThemeMode::Dark; }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
-
-protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+
+#ifdef Q_OS_WIN
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 
 private slots:
     void on_action_open_project_triggered();
@@ -216,7 +223,6 @@ private:
     QToolButton *problemsButton;
     QToolButton *gitButton;
     QToolButton *sidebarToggleButton;
-    QToolButton *themeButton;
     QToolButton *settingsButton;
     QTabBar *tabBar;
     QTabBar *bottomPanelTabs;
@@ -268,7 +274,12 @@ private:
     QStringList recentFiles;
     void openRecentFile(const QString &path);
     void addRecentFile(const QString &path);
-
+    
+    // Modular UI components
+    CustomTitleBar *m_titleBar;
+    WindowAnimator *m_windowAnimator;
+    ThemeManager *m_themeManager;
+    
     // UI/UX Polish
     Minimap *m_minimap;
     SplitManager *m_splitManager;

@@ -1,19 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource prefix="/">
     <file>icon.png</file>
-    <file>resources/icons/app-icon.svg</file>
-    <file>resources/icons/sidebar-toggle.svg</file>
-    <file>resources/icons/go-up.svg</file>
-    <file>resources/icons/file-tree.svg</file>
-    <file>resources/icons/todo.svg</file>
-    <file>resources/icons/terminal.svg</file>
-    <file>resources/icons/problems.svg</file>
-    <file>resources/icons/git.svg</file>
-    <file>resources/icons/theme.svg</file>
-    <file>resources/icons/settings.svg</file>
-    <file>resources/icons/close.svg</file>
-    <file>resources/icons/check.svg</file>
-    <file>resources/icons/folder.svg</file>
     <file alias="icons/app-icon.svg">resources/icons/app-icon.svg</file>
     <file alias="icons/sidebar-toggle.svg">resources/icons/sidebar-toggle.svg</file>
     <file alias="icons/go-up.svg">resources/icons/go-up.svg</file>
@@ -27,5 +14,8 @@
     <file alias="icons/close.svg">resources/icons/close.svg</file>
     <file alias="icons/check.svg">resources/icons/check.svg</file>
     <file alias="icons/folder.svg">resources/icons/folder.svg</file>
+    <file alias="icons/minimize.svg">resources/icons/minimize.svg</file>
+    <file alias="icons/maximize.svg">resources/icons/maximize.svg</file>
+    <file alias="icons/menu.svg">resources/icons/menu.svg</file>
 </qresource>
 </RCC>

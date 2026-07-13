@@ -322,9 +322,8 @@
      </property>
       <addaction name="action_about"/>
       <addaction name="separator"/>
-      <addaction name="action_editor_settings"/>
-      <addaction name="action_theme"/>
-      <addaction name="action_license"/>
+       <addaction name="action_editor_settings"/>
+       <addaction name="action_license"/>
       <addaction name="action_check_updates"/>
      </widget>
     <widget class="QMenu" name="menu_plugins">
@@ -467,11 +466,6 @@
    <property name="text">
     <string>&amp;License</string>
    </property>
-  </action>
-   <action name="action_theme">
-    <property name="text">
-     <string>&amp;Theme</string>
-    </property>
    </action>
     <action name="action_manage_plugins">
      <property name="text">

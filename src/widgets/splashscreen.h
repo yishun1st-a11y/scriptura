@@ -88,9 +88,12 @@ public:
         show();
         raise();
         QApplication::processEvents();
-        
-        // Close after delay
-        QTimer::singleShot(milliseconds, this, &QWidget::close);
+
+        // NOTE: Do not auto-close here. Let the caller create and show the
+        // main window first, then close the splash. Auto-closing on our own
+        // timer can make the splash the last visible top-level window, which
+        // triggers QApplication's lastWindowClosed -> quit and prevents the
+        // main window from ever appearing.
     }
 };
 

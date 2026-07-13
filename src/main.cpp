@@ -66,12 +66,69 @@ ThemeMode getThemeMode(int legacy) {
     return static_cast<ThemeMode>(remainder / 2);
 }
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+// Link with dwmapi.lib
+#pragma comment(lib, "dwmapi.lib")
+
+// DWM attributes (may not be in all SDK versions)
+#ifndef DWMWA_MICA_EFFECT
+#define DWMWA_MICA_EFFECT 1029
+#endif
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_COLOR_COLORS
+#define DWMWA_COLOR_COLORS 1028
+#endif
+
+struct DWM_COLOR_PARAMS {
+    DWORD dwFlags;
+    COLORREF clrCaption;
+    COLORREF clrText;
+    COLORREF clrHyperlink;
+    COLORREF clrCaptionText;
+    COLORREF clrCaptionButtonText;
+    COLORREF clrCaptionButtonHoverText;
+    COLORREF clrCaptionButtonPressedText;
+};
+
+// Enable Mica or Acrylic material effect on Windows 11/10
+void enableMicaEffect(HWND hwnd, bool darkMode) {
+    // Try Mica first (Windows 11 22H2+)
+    BOOL useMica = TRUE;
+    HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &useMica, sizeof(useMica));
+    
+    if (FAILED(hr)) {
+        // Mica not available - just enable dark mode title bar
+        BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
+    }
+    
+    // Enable rounded corners (Windows 11)
+    int cornerPreference = DWMWCP_ROUND;
+    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
+    
+    // Enable dark mode for title bar
+    BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
+}
+#endif // Q_OS_WIN
+
 int main(int argc, char *argv[])
 {
     CrashHandler::install();
 
     QApplication::setOrganizationName("Scriptura");
     QApplication::setApplicationName("Scriptura");
+    QApplication::setStyle("Fusion");
 
     QApplication a(argc, argv);
 
@@ -99,90 +156,121 @@ int main(int argc, char *argv[])
     a.setWindowIcon(QIcon(":/icon.png"));
 
     a.setStyleSheet(R"(
-/* Modern Professional IDE Styling */
+/* ============================================================
+   Scriptura — Modern IDE Design System
+   Cohesive, VS Code-inspired flat styling with refined spacing,
+   hairline borders, and consistent typography.
+   ============================================================ */
 
-/* Base styling for all widgets */
+/* ---- Base ---- */
 QMainWindow, QWidget {
     background-color: palette(window);
-    font-family: "DejaVu Sans Mono", "Consolas", "Courier New", monospace;
+    font-family: "Inter", "Segoe UI", "SF Pro Text", "Noto Sans", "DejaVu Sans", sans-serif;
+    font-size: 13px;
 }
 
-/* Group boxes with modern styling */
+/* Monospace surfaces get a code font */
+QPlainTextEdit, QTextEdit {
+    font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", "DejaVu Sans Mono", "Consolas", monospace;
+    font-size: 13px;
+}
+
+/* ---- Group boxes ---- */
 QGroupBox {
     border: 1px solid palette(mid);
-    border-radius: 12px;
-    margin-top: 12px;
-    padding-top: 16px;
+    border-radius: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    background-color: palette(base);
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    left: 12px;
-    padding: 0 8px;
+    left: 10px;
+    padding: 0 6px;
     color: palette(text);
     font-weight: 600;
+    font-size: 12px;
 }
 
-/* Tree views and similar widgets */
+/* ---- Content surfaces ---- */
 QTreeView,
-QTabWidget::pane,
-QPlainTextEdit,
-QTextEdit,
-QLineEdit,
-QComboBox,
+QListView,
+QTableView,
 QAbstractItemView {
     border: 1px solid palette(mid);
-    border-radius: 8px;
+    border-radius: 6px;
     background-color: palette(base);
-}
-
-/* Menu bars and toolbars */
-QMenuBar,
-QToolBar {
-    background-color: palette(button);
-    border-bottom: 1px solid palette(mid);
+    outline: none;
     padding: 2px;
 }
 
-QStatusBar {
-    background-color: palette(button);
-    border-top: 1px solid palette(mid);
-    padding: 4px 8px;
-    color: palette(text);
+/* ---- Menu bar & toolbar ---- */
+QMenuBar {
+    background-color: palette(window);
+    border: none;
+    padding: 2px 4px;
+    spacing: 2px;
 }
 
-/* Menu styling */
+QToolBar {
+    background-color: palette(window);
+    border: none;
+    border-bottom: 1px solid palette(mid);
+    padding: 4px 6px;
+    spacing: 4px;
+}
+
+QToolBar::separator {
+    background-color: palette(mid);
+    width: 1px;
+    margin: 4px 6px;
+}
+
+QStatusBar {
+    background-color: palette(window);
+    border-top: 1px solid palette(mid);
+    padding: 2px 10px;
+    color: palette(text);
+    font-size: 12px;
+}
+
+QStatusBar::item {
+    border: none;
+    padding: 0 6px;
+}
+
+/* ---- Menus ---- */
 QMenu {
-    background-color: palette(button);
+    background-color: palette(base);
     border: 1px solid palette(mid);
     border-radius: 8px;
-    padding: 4px;
+    padding: 6px;
 }
 
-/* Menu bar items */
 QMenuBar::item {
     background: transparent;
-    padding: 6px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
     color: palette(text);
 }
 
 QMenuBar::item:selected {
     background-color: palette(light);
-    color: palette(highlight);
 }
 
 QMenuBar::item:pressed {
-    background-color: palette(mid);
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
 }
 
-/* Menu items */
 QMenu::item {
     background-color: transparent;
-    padding: 6px 24px 6px 8px;
-    border-radius: 4px;
+    padding: 6px 28px 6px 12px;
+    border-radius: 6px;
     color: palette(text);
+    margin: 1px 2px;
 }
 
 QMenu::item:selected {
@@ -194,37 +282,37 @@ QMenu::item:disabled {
     color: palette(mid);
 }
 
-/* Toolbar items */
-QToolBar::item {
-    border-radius: 6px;
-    padding: 2px 4px;
+QMenu::separator {
+    height: 1px;
+    background-color: palette(mid);
+    margin: 5px 8px;
 }
 
-/* Modern tab styling */
+QMenu::icon {
+    padding-left: 6px;
+}
+
+/* ---- Tabs ---- */
 QTabBar {
-    background-color: palette(button);
+    background-color: transparent;
     border: none;
     qproperty-drawBase: false;
 }
 
 QTabBar::tab {
-    border: 1px solid palette(mid);
-    border-bottom-left-radius: 0px;
-    border-bottom-right-radius: 0px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    background-color: palette(button);
+    border: none;
+    border-top: 2px solid transparent;
+    background-color: transparent;
     padding: 8px 16px;
-    margin-right: 4px;
+    margin: 0;
     color: palette(mid);
-    min-width: 80px;
+    min-width: 70px;
 }
 
 QTabBar::tab:selected {
     background-color: palette(base);
-    border-bottom: 2px solid palette(highlight);
+    border-top: 2px solid palette(highlight);
     color: palette(text);
-    margin-bottom: -2px;
 }
 
 QTabBar::tab:hover:!selected {
@@ -236,42 +324,41 @@ QTabBar::tab:disabled {
     color: palette(mid);
 }
 
-/* Tab widget pane */
 QTabWidget::pane {
-    border: 1px solid palette(mid);
-    border-top: none;
-    border-radius: 0px 0px 8px 8px;
+    border: none;
+    border-top: 1px solid palette(mid);
     background-color: palette(base);
 }
 
-/* Button styling */
-QToolButton,
+/* ---- Buttons ---- */
 QPushButton,
 QDialogButtonBox > QPushButton {
     border: 1px solid palette(mid);
-    border-radius: 8px;
-    padding: 8px 16px;
+    border-radius: 6px;
+    padding: 7px 16px;
     background-color: palette(button);
     color: palette(text);
-    min-height: 32px;
-    min-width: 64px;
+    min-height: 20px;
+    min-width: 72px;
 }
 
-QToolButton:hover,
 QPushButton:hover,
 QDialogButtonBox > QPushButton:hover {
     background-color: palette(light);
-    border-color: palette(text);
+    border-color: palette(highlight);
 }
 
-QToolButton:pressed,
 QPushButton:pressed,
 QDialogButtonBox > QPushButton:pressed {
     background-color: palette(mid);
-    border-color: palette(dark);
 }
 
-QToolButton:disabled,
+QPushButton:default {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border-color: palette(highlight);
+}
+
 QPushButton:disabled,
 QDialogButtonBox > QPushButton:disabled {
     background-color: palette(button);
@@ -279,15 +366,52 @@ QDialogButtonBox > QPushButton:disabled {
     color: palette(mid);
 }
 
+/* Accent primary button (welcome screen, dialogs) */
+QPushButton#primaryButton {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-weight: 600;
+}
+
+QPushButton#primaryButton:hover {
+    background-color: palette(highlight);
+    border: none;
+}
+
+/* ---- Tool buttons (icon buttons) ---- */
+QToolButton {
+    border: none;
+    border-radius: 6px;
+    padding: 5px;
+    background-color: transparent;
+    color: palette(text);
+}
+
+QToolButton:hover {
+    background-color: palette(light);
+}
+
+QToolButton:pressed {
+    background-color: palette(mid);
+}
+
 QToolButton:checked {
     background-color: palette(highlight);
-    border-color: palette(highlight);
     color: palette(highlighted-text);
 }
 
-/* Input field styling */
+QToolButton:disabled {
+    color: palette(mid);
+}
+
+/* ---- Inputs ---- */
 QLineEdit,
-QComboBox {
+QComboBox,
+QSpinBox,
+QDoubleSpinBox {
     border: 1px solid palette(mid);
     border-radius: 6px;
     padding: 6px 10px;
@@ -295,28 +419,44 @@ QComboBox {
     color: palette(text);
     selection-background-color: palette(highlight);
     selection-color: palette(highlighted-text);
+    min-height: 18px;
 }
 
 QLineEdit:focus,
-QComboBox:focus {
-    border: 2px solid palette(highlight);
-    padding: 5px 9px;
-    background-color: palette(base);
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus {
+    border: 1px solid palette(highlight);
 }
 
 QLineEdit:disabled,
-QComboBox:disabled {
+QComboBox:disabled,
+QSpinBox:disabled {
     border-color: palette(mid);
     color: palette(mid);
-    background-color: palette(button);
+    background-color: palette(window);
 }
 
-/* Text edit areas */
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+    background-color: palette(base);
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+    padding: 4px;
+}
+
+/* ---- Text editors ---- */
 QPlainTextEdit,
 QTextEdit {
     border: 1px solid palette(mid);
     border-radius: 6px;
-    padding: 8px;
+    padding: 6px;
     background-color: palette(base);
     color: palette(text);
     selection-background-color: palette(highlight);
@@ -325,68 +465,93 @@ QTextEdit {
 
 QPlainTextEdit:focus,
 QTextEdit:focus {
-    border: 2px solid palette(highlight);
+    border: 1px solid palette(highlight);
 }
 
-/* Tree view styling */
-QTreeView {
-    border: 1px solid palette(mid);
-    border-radius: 6px;
-    background-color: palette(base);
-    padding: 4px;
-}
-
-QTreeView::item {
-    padding: 4px 8px;
-    border-radius: 4px;
+/* ---- Tree / list items ---- */
+QTreeView::item,
+QListView::item {
+    padding: 5px 6px;
+    border-radius: 5px;
     color: palette(text);
+    border: none;
 }
 
-QTreeView::item:hover {
+QTreeView::item:hover,
+QListView::item:hover {
     background-color: palette(light);
 }
 
-QTreeView::item:selected {
+QTreeView::item:selected,
+QListView::item:selected {
     background-color: palette(highlight);
     color: palette(highlighted-text);
 }
 
-QTreeView::item:selected:!active {
+QTreeView::item:selected:!active,
+QListView::item:selected:!active {
     background-color: palette(mid);
+    color: palette(text);
 }
 
-/* Scrollbar styling */
-QScrollBar:horizontal,
+QTreeView::branch {
+    background: transparent;
+}
+
+QHeaderView::section {
+    background-color: palette(window);
+    border: none;
+    border-bottom: 1px solid palette(mid);
+    padding: 6px 8px;
+    color: palette(text);
+    font-weight: 600;
+}
+
+/* ---- Scrollbars (thin, overlay-style) ---- */
 QScrollBar:vertical {
-    background-color: palette(button);
-    border-radius: 6px;
-    margin: 0px;
+    background: transparent;
+    width: 12px;
+    margin: 0;
 }
 
-QScrollBar::handle:horizontal,
+QScrollBar:horizontal {
+    background: transparent;
+    height: 12px;
+    margin: 0;
+}
+
 QScrollBar::handle:vertical {
     background-color: palette(mid);
-    border-radius: 6px;
-    min-height: 20px;
-    min-width: 20px;
+    border-radius: 5px;
+    min-height: 30px;
+    margin: 2px;
 }
 
-QScrollBar::handle:horizontal:hover,
-QScrollBar::handle:vertical:hover {
-    background-color: palette(text);
+QScrollBar::handle:horizontal {
+    background-color: palette(mid);
+    border-radius: 5px;
+    min-width: 30px;
+    margin: 2px;
 }
 
-QScrollBar::add-line:horizontal,
-QScrollBar::sub-line:horizontal,
-QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical {
+QScrollBar::handle:hover {
+    background-color: palette(dark);
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line {
     height: 0px;
     width: 0px;
     border: none;
     background: transparent;
 }
 
-/* Checkbox and radio button styling */
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: transparent;
+}
+
+/* ---- Checkboxes & radios ---- */
 QCheckBox,
 QRadioButton {
     spacing: 8px;
@@ -406,6 +571,11 @@ QRadioButton::indicator {
     border-radius: 8px;
 }
 
+QCheckBox::indicator:hover,
+QRadioButton::indicator:hover {
+    border-color: palette(highlight);
+}
+
 QCheckBox::indicator:checked {
     background-color: palette(highlight);
     border-color: palette(highlight);
@@ -415,7 +585,7 @@ QCheckBox::indicator:checked {
 QRadioButton::indicator:checked {
     background-color: palette(highlight);
     border-color: palette(highlight);
-    background-color: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.25 palette(highlight), stop:0.5 palette(base));
+    background-color: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0.35 palette(highlighted-text), stop:0.4 palette(highlight));
 }
 
 QCheckBox:disabled,
@@ -426,69 +596,89 @@ QRadioButton:disabled {
 QCheckBox::indicator:disabled,
 QRadioButton::indicator:disabled {
     border-color: palette(mid);
-    background-color: palette(button);
+    background-color: palette(window);
 }
 
-/* Tooltip styling */
+/* ---- Tooltips ---- */
 QToolTip {
-    background-color: palette(tooltip-base);
-    color: palette(tooltip-text);
+    background-color: palette(base);
+    color: palette(text);
     border: 1px solid palette(mid);
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 5px 9px;
     font-size: 12px;
 }
 
-/* Focus frame for keyboard navigation */
-:focus {
-    outline: none;
-}
-
-/* Status bar styling */
-QStatusBar::item {
-    border: none;
-    padding: 0 8px;
-}
-
-/* Improved dialog buttons */
-QDialogButtonBox {
-    padding: 8px;
-}
-
-QDialogButtonBox > QPushButton {
-    min-width: 80px;
-    padding: 8px 16px;
-}
-
-/* Spin box styling */
-QSpinBox {
-    border: 1px solid palette(mid);
-    border-radius: 6px;
-    padding: 4px 8px;
-    background-color: palette(base);
-    color: palette(text);
-}
-
-QSpinBox:focus {
-    border: 2px solid palette(highlight);
-    padding: 3px 7px;
-}
-
+/* ---- Spin box buttons ---- */
 QSpinBox::up-button,
-QSpinBox::down-button {
+QSpinBox::down-button,
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button {
     border: none;
-    background-color: palette(button);
+    background-color: transparent;
     width: 16px;
 }
 
 QSpinBox::up-button:hover,
-QSpinBox::down-button:hover {
+QSpinBox::down-button:hover,
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
     background-color: palette(light);
 }
 
-QSpinBox::up-button:pressed,
-QSpinBox::down-button:pressed {
+/* ---- Progress bars ---- */
+QProgressBar {
+    border: none;
+    border-radius: 4px;
     background-color: palette(mid);
+    height: 6px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: palette(highlight);
+    border-radius: 4px;
+}
+
+/* ---- Splitter handles ---- */
+QSplitter::handle {
+    background-color: palette(mid);
+}
+
+QSplitter::handle:horizontal {
+    width: 1px;
+}
+
+QSplitter::handle:vertical {
+    height: 1px;
+}
+
+QSplitter::handle:hover {
+    background-color: palette(highlight);
+}
+
+/* ---- Dialogs ---- */
+QDialog {
+    background-color: palette(window);
+}
+
+QDialogButtonBox {
+    padding: 6px;
+}
+
+QDialogButtonBox > QPushButton {
+    min-width: 84px;
+}
+
+/* ---- Focus ---- */
+:focus {
+    outline: none;
+}
+
+/* ---- Labels ---- */
+QLabel#welcomeTitle {
+    color: palette(text);
+    letter-spacing: 0.5px;
 }
 )");
 
@@ -514,15 +704,28 @@ QSpinBox::down-button:pressed {
     splash->setThemeBackground(themeWindowColor);
     splash->showWithDelay(4000);  // 4 seconds
 
-    // Timer to create and show main window after splash screen duration
+    // Timer to create and show main window after splash screen duration.
+    // IMPORTANT: show the main window BEFORE closing the splash. Otherwise the
+    // splash can become the last visible top-level window, which makes Qt quit
+    // the application (quitOnLastWindowClosed) before the main window appears.
     QTimer::singleShot(4000, [splash, initialProject, initialFiles]() {
-        // Close splash screen
+        qDebug() << "[DIAG] startup timer fired; creating MainWindow...";
+        // Create and show main window first
+        MainWindow *mainWindow = new MainWindow(initialProject, initialFiles);
+        qDebug() << "[DIAG] MainWindow constructed; calling show()...";
+        mainWindow->show();
+        qDebug() << "[DIAG] MainWindow shown; closing splash...";
+
+        // Now it is safe to close the splash (a visible window already exists)
         splash->close();
         splash->deleteLater();
-        
-        // Create and show main window
-        MainWindow *mainWindow = new MainWindow(initialProject, initialFiles);
-        mainWindow->show();
+        qDebug() << "[DIAG] splash closed.";
+
+        // Enable Mica/Acrylic effects on Windows 11+ after main window is created
+#ifdef Q_OS_WIN
+        HWND hwnd = reinterpret_cast<HWND>(mainWindow->winId());
+        enableMicaEffect(hwnd, mainWindow->isDarkModeEnabled());
+#endif
     });
 
     return a.exec();

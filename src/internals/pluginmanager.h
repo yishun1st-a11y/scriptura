@@ -378,7 +378,7 @@ private:
     DependencyResolver m_resolver;                                  ///< 依賴解析器
     quint64 m_nextSubscriptionId = 1;                               ///< 下一個訂閱 ID
     PluginContext* m_context = nullptr;                             ///< 插件上下文
-    mutable QMutex m_mutex;                                         ///< 執行緒安全鎖
+    mutable QRecursiveMutex m_mutex;                               ///< 執行緒安全鎖（遞歸，避免內部呼叫重入死鎖）
     
     static const QString DISABLED_PLUGINS_FILE;                      ///< 停用插件列表檔案名稱
 };
