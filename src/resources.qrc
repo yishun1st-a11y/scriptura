@@ -14,6 +14,7 @@
     <file alias="icons/close.svg">resources/icons/close.svg</file>
     <file alias="icons/check.svg">resources/icons/check.svg</file>
     <file alias="icons/folder.svg">resources/icons/folder.svg</file>
+    <file alias="icons/file.svg">resources/icons/file.svg</file>
     <file alias="icons/minimize.svg">resources/icons/minimize.svg</file>
     <file alias="icons/maximize.svg">resources/icons/maximize.svg</file>
     <file alias="icons/menu.svg">resources/icons/menu.svg</file>

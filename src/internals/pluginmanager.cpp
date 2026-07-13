@@ -246,12 +246,42 @@ void PluginManager::unloadPluginImpl(const QString& id)
             qWarning() << "Exception during plugin shutdown:" << e.what();
         }
     }
-    
+
+    // 在卸載共享庫之前，先移除該插件註冊的事件處理器，
+    // 避免後續 publishEvent / EventBus::publish 呼叫到已釋放/已取消映射的回調 (use-after-free / SIGSEGV)
+    {
+        QMutexLocker locker(&m_mutex);
+        const QList<quint64> ids = m_pluginSubscriptions.value(id);
+        for (quint64 subId : ids) {
+            for (auto it = m_eventHandlers.begin(); it != m_eventHandlers.end();) {
+                QList<Subscription>& subs = it.value();
+                for (auto sit = subs.begin(); sit != subs.end();) {
+                    if (sit->id == subId) {
+                        sit = subs.erase(sit);
+                    } else {
+                        ++sit;
+                    }
+                }
+                if (subs.isEmpty()) {
+                    it = m_eventHandlers.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+        m_pluginSubscriptions.remove(id);
+    }
+
+    // 同時移除該插件實例在 EventBus 上的所有訂閱 (不依賴插件是否傳入 owner)
+    if (info.instance) {
+        EventBus::instance()->unsubscribeReceiver(info.instance);
+    }
+
     if (info.loader) {
         info.loader->unload();
         info.loader.reset();
     }
-    
+
     m_plugins.remove(id);
 }
 
@@ -331,9 +361,19 @@ void PluginManager::publishEvent(const QString& event, const QVariant& data)
 quint64 PluginManager::subscribeToEvent(const QString& event, 
                                          std::function<void(const QVariant&)> callback)
 {
+    return subscribeToEvent(event, std::move(callback), QString());
+}
+
+quint64 PluginManager::subscribeToEvent(const QString& event,
+                                         std::function<void(const QVariant&)> callback,
+                                         const QString& ownerPluginId)
+{
     QMutexLocker locker(&m_mutex);
     quint64 id = m_nextSubscriptionId++;
     m_eventHandlers[event].append({id, std::move(callback)});
+    if (!ownerPluginId.isEmpty()) {
+        m_pluginSubscriptions[ownerPluginId].append(id);
+    }
     return id;
 }
 

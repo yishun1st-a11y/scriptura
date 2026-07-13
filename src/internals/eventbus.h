@@ -5,6 +5,7 @@
 #include <QVariant>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QPointer>
 #include <functional>
 #include <QHash>
 
@@ -70,6 +71,29 @@ public:
     SubscriptionId subscribe(const QString& event, 
                            std::function<void(const QVariant&)> callback,
                            Qt::ConnectionType type = Qt::AutoConnection);
+
+    /**
+     * @brief 訂閱事件並綁定訂閱者物件的生命週期
+     *
+     * 當 receiver 被銷毀時 (QObject::destroyed)，該訂閱會自動取消，
+     * 避免回調函數在擁有者已被釋放後仍被呼叫，造成 use-after-free / 區段錯誤。
+     *
+     * @param event 事件名稱
+     * @param receiver 擁有此回調的 QObject (可為 nullptr 表示不綁定生命週期)
+     * @param callback 事件回調函數
+     * @param type Qt 連接類型 (預設為 Qt::AutoConnection)
+     * @return 訂閱 ID，可用於取消訂閱
+     */
+    SubscriptionId subscribe(const QString& event,
+                           QObject* receiver,
+                           std::function<void(const QVariant&)> callback,
+                           Qt::ConnectionType type = Qt::AutoConnection);
+
+    /**
+     * @brief 取消某個 QObject 擁有者的所有訂閱
+     * @param receiver 擁有者物件指標
+     */
+    void unsubscribeReceiver(QObject* receiver);
     
     /**
      * @brief 取消訂閱事件
@@ -92,6 +116,8 @@ private:
     struct Subscription {
         SubscriptionId id;
         std::function<void(const QVariant&)> callback;
+        QPointer<QObject> receiver;  // 可選擁有者，銷毀時自動取消訂閱
+        bool hasReceiver = false;    // 是否綁定擁有者生命週期
     };
 
     /**

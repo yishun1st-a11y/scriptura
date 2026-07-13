@@ -230,6 +230,17 @@ public:
     quint64 subscribeToEvent(const QString& event, 
                              std::function<void(const QVariant&)> callback);
 
+    /**
+     * @brief 訂閱事件 (綁定擁有者插件 ID)
+     * @param event 事件名稱
+     * @param callback 回調函數
+     * @param ownerPluginId 擁有此訂閱的插件 ID，卸載時會自動移除
+     * @return 訂閱 ID
+     */
+    quint64 subscribeToEvent(const QString& event, 
+                             std::function<void(const QVariant&)> callback,
+                             const QString& ownerPluginId);
+
 signals:
     /**
      * @brief 插件載入成功信號
@@ -373,6 +384,7 @@ private:
     QHash<QString, QString> m_pluginPaths;                          ///< 插件ID -> 目錄路徑
     QHash<QString, QString> m_pluginVersions;                       ///< 插件ID -> 版本
     QHash<QString, QList<Subscription>> m_eventHandlers;            ///< 事件處理器
+    QHash<QString, QList<quint64>> m_pluginSubscriptions;            ///< 插件ID -> 訂閱ID 列表
     QSet<QString> m_allowedPlugins;                                 ///< 允許載入的插件 ID
     QSet<QString> m_disabledPlugins;                                ///< 手動停用的插件 ID
     DependencyResolver m_resolver;                                  ///< 依賴解析器

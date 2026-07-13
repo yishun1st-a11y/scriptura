@@ -32,6 +32,7 @@
 #include "customtitlebar.h"
 #include "windowanimator.h"
 #include "thememanager.h"
+#include "themeicons.h"
 
 #include <QFileDialog>
 #include <QFile>
@@ -140,6 +141,15 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
 
     // Initialize modular UI components
     m_themeManager = new ThemeManager(this);
+    // 主題切換時自動重新著色所有追蹤中的圖標，確保在各主題下都保持可見
+    connect(m_themeManager, &ThemeManager::themeChanged,
+            ThemeIcons::instance(), &ThemeIcons::recolorAll);
+    // 檔案樹使用主題感知的圖標提供者，切換主題後需重新取得圖標
+    connect(m_themeManager, &ThemeManager::themeChanged, this, [this]() {
+        if (fileModel) {
+            fileModel->layoutChanged();
+        }
+    });
     m_windowAnimator = new WindowAnimator(this);
     m_titleBar = new CustomTitleBar(this);
     
@@ -213,6 +223,9 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     }
     
     fileModel = new QFileSystemModel(this);
+    // 使用主題感知的圖標提供者，確保檔案樹圖標在淺/深色/高對比下都可見
+    m_fileIconProvider = new ThemeFileIconProvider();
+    fileModel->setIconProvider(m_fileIconProvider);
     fileModel->setRootPath(QDir::homePath());
     ui->fileTreeView->setModel(fileModel);
     ui->fileTreeView->setHeaderHidden(true);
@@ -273,7 +286,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
 
     // Top toolbar setup
     sidebarToggleButton = new QToolButton(ui->topToolbar);
-    sidebarToggleButton->setIcon(QIcon(":/icons/sidebar-toggle.svg"));
+    sidebarToggleButton->setIcon(ThemeIcons::instance()->icon(":/icons/sidebar-toggle.svg"));
     sidebarToggleButton->setIconSize(QSize(20, 20));
     sidebarToggleButton->setToolTip(tr("Toggle Sidebar"));
     sidebarToggleButton->setCheckable(true);
@@ -282,7 +295,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     ui->topToolbarLayout->addWidget(sidebarToggleButton);
 
     goUpButton = new QToolButton(ui->topToolbar);
-    goUpButton->setIcon(QIcon(":/icons/go-up.svg"));
+    goUpButton->setIcon(ThemeIcons::instance()->icon(":/icons/go-up.svg"));
     goUpButton->setIconSize(QSize(18, 18));
     goUpButton->setToolTip(tr("Go Up"));
     goUpButton->setEnabled(false);
@@ -305,7 +318,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
 
     // Right-side toolbar buttons
     settingsButton = new QToolButton(ui->topToolbar);
-    settingsButton->setIcon(QIcon(":/icons/settings.svg"));
+    settingsButton->setIcon(ThemeIcons::instance()->icon(":/icons/settings.svg"));
     settingsButton->setIconSize(QSize(20, 20));
     settingsButton->setToolTip(tr("Editor Settings"));
     settingsButton->setFixedSize(32, 32);
@@ -313,7 +326,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
 
     // Sidebar icon buttons (bottom of drawer)
     fileTreeToggleButton = new QToolButton(ui->sidebarDrawer);
-    fileTreeToggleButton->setIcon(QIcon(":/icons/file-tree.svg"));
+    fileTreeToggleButton->setIcon(ThemeIcons::instance()->icon(":/icons/file-tree.svg"));
     fileTreeToggleButton->setIconSize(QSize(20, 20));
     fileTreeToggleButton->setToolTip(tr("File Tree"));
     fileTreeToggleButton->setCheckable(true);
@@ -329,7 +342,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     iconBarLayout->setAlignment(Qt::AlignCenter);
 
     placeholderButton = new QToolButton(iconBar);
-    placeholderButton->setIcon(QIcon(":/icons/todo.svg"));
+    placeholderButton->setIcon(ThemeIcons::instance()->icon(":/icons/todo.svg"));
     placeholderButton->setIconSize(QSize(20, 20));
     placeholderButton->setToolTip(tr("Todo"));
     placeholderButton->setCheckable(true);
@@ -337,7 +350,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     iconBarLayout->addWidget(placeholderButton);
 
     terminalButton = new QToolButton(iconBar);
-    terminalButton->setIcon(QIcon(":/icons/terminal.svg"));
+    terminalButton->setIcon(ThemeIcons::instance()->icon(":/icons/terminal.svg"));
     terminalButton->setIconSize(QSize(20, 20));
     terminalButton->setToolTip(tr("Terminal"));
     terminalButton->setCheckable(true);
@@ -345,7 +358,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     iconBarLayout->addWidget(terminalButton);
 
     problemsButton = new QToolButton(iconBar);
-    problemsButton->setIcon(QIcon(":/icons/problems.svg"));
+    problemsButton->setIcon(ThemeIcons::instance()->icon(":/icons/problems.svg"));
     problemsButton->setIconSize(QSize(20, 20));
     problemsButton->setToolTip(tr("Problems"));
     problemsButton->setCheckable(true);
@@ -353,7 +366,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
     iconBarLayout->addWidget(problemsButton);
 
     gitButton = new QToolButton(iconBar);
-    gitButton->setIcon(QIcon(":/icons/git.svg"));
+    gitButton->setIcon(ThemeIcons::instance()->icon(":/icons/git.svg"));
     gitButton->setIconSize(QSize(20, 20));
     gitButton->setToolTip(tr("Git"));
     gitButton->setCheckable(true);
@@ -945,7 +958,7 @@ CodeEditor* MainWindow::getCurrentCodeEditor()
 QPushButton* MainWindow::createTabCloseButton(int tabIndex)
 {
     QPushButton *closeBtn = new QPushButton();
-    closeBtn->setIcon(QIcon(":/icons/close.svg"));
+    closeBtn->setIcon(ThemeIcons::instance()->icon(":/icons/close.svg"));
     closeBtn->setFixedSize(20, 20);
     closeBtn->setFlat(true);
     closeBtn->setCursor(Qt::ArrowCursor);
@@ -979,7 +992,7 @@ QPushButton* MainWindow::createTabCloseButton(int tabIndex)
      descriptionLabel->setFont(descFont);
      descriptionLabel->setStyleSheet("color: palette(mid);");
 
-     QPushButton *openProjectButton = new QPushButton(QIcon(":/icons/folder.svg"), tr("Open Project"), widget);
+     QPushButton *openProjectButton = new QPushButton(ThemeIcons::instance()->icon(":/icons/folder.svg"), tr("Open Project"), widget);
      openProjectButton->setObjectName("primaryButton");
      openProjectButton->setMinimumWidth(160);
 
@@ -1123,7 +1136,8 @@ QWidget* MainWindow::createThemeSettingsWidget()
     mainLayout->addWidget(themeGroup);
     mainLayout->addStretch();
 
-    connect(themeBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked), [&](QAbstractButton *button) {
+    connect(themeBtnGroup, static_cast<void (QButtonGroup::*)(QAbstractButton*)>(&QButtonGroup::buttonClicked),
+            this, [this, themeMap](QAbstractButton *button) {
         QPushButton *btn = qobject_cast<QPushButton*>(button);
         if (!btn || !themeMap.contains(btn))
             return;
@@ -2100,7 +2114,7 @@ void MainWindow::updateTabBarVisibility()
 QPushButton* MainWindow::createSettingsTabCloseButton(int tabIndex)
 {
     QPushButton *closeBtn = new QPushButton();
-    closeBtn->setIcon(QIcon(":/icons/close.svg"));
+    closeBtn->setIcon(ThemeIcons::instance()->icon(":/icons/close.svg"));
     closeBtn->setFixedSize(20, 20);
     closeBtn->setFlat(true);
     closeBtn->setCursor(Qt::ArrowCursor);

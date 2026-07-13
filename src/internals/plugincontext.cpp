@@ -86,10 +86,10 @@ void PluginContext::notify(const QString& event, const QVariant& data)
     EventBus::instance()->publish(event, data);
 }
 
-EventBus::SubscriptionId PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback)
+EventBus::SubscriptionId PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback, QObject* owner)
 {
-    // 訂閱事件並儲存訂閱 ID
-    EventBus::SubscriptionId id = EventBus::instance()->subscribe(event, callback);
+    // 訂閱事件並儲存訂閱 ID (綁定擁有者生命週期，避免 use-after-free)
+    EventBus::SubscriptionId id = EventBus::instance()->subscribe(event, owner, callback);
     m_eventHandlers[event].append({id, callback});
     return id;
 }

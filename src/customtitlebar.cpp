@@ -1,4 +1,5 @@
 #include "customtitlebar.h"
+#include "themeicons.h"
 #include <QMouseEvent>
 #include <QApplication>
 #include <QStyle>
@@ -35,7 +36,7 @@ void CustomTitleBar::setupLayout()
     menuButton->setObjectName("TitleBarMenu");
     menuButton->setFixedSize(32, 24);
     menuButton->setToolTip(tr("Menu"));
-    menuButton->setIcon(QIcon(":/icons/menu.svg"));
+    menuButton->setIcon(ThemeIcons::instance()->icon(":/icons/menu.svg"));
     menuButton->setIconSize(QSize(16, 16));
     connect(menuButton, &QPushButton::clicked, this, &CustomTitleBar::showMenu);
     layout->addWidget(menuButton);

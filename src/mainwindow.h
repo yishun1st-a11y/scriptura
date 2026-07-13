@@ -57,6 +57,7 @@
 #include "customtitlebar.h"
 #include "windowanimator.h"
 #include "thememanager.h"
+#include "themeicons.h"
 
 class DapClient;
 class DebugPanel;
@@ -216,6 +217,7 @@ private:
     QModelIndex rootIndex;
     QList<OpenFile> openFiles;
     QFileSystemModel *fileModel;
+    ThemeFileIconProvider *m_fileIconProvider = nullptr;
     QToolButton *goUpButton;
     QToolButton *placeholderButton;
     QToolButton *fileTreeToggleButton;

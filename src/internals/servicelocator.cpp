@@ -4,8 +4,11 @@
 // 靜態成員初始化
 ServiceLocator* ServiceLocator::s_instance = nullptr;
 
+static QMutex s_instanceMutex;
+
 ServiceLocator* ServiceLocator::instance()
 {
+    QMutexLocker locker(&s_instanceMutex);
     if (!s_instance) {
         s_instance = new ServiceLocator();
     }
@@ -14,6 +17,7 @@ ServiceLocator* ServiceLocator::instance()
 
 void ServiceLocator::destroyInstance()
 {
+    QMutexLocker locker(&s_instanceMutex);
     if (s_instance) {
         delete s_instance;
         s_instance = nullptr;

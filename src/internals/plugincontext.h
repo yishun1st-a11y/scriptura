@@ -143,9 +143,12 @@ public:
      * @brief 訂閱事件
      * @param event 事件名稱
      * @param callback 事件回調函數
+     * @param owner 擁有此回調的 QObject (預設 nullptr，會在物件銷毀時自動取消訂閱)
      * @return 訂閱 ID，可用於取消訂閱
      */
-    EventBus::SubscriptionId subscribe(const QString& event, std::function<void(const QVariant&)> callback);
+    EventBus::SubscriptionId subscribe(const QString& event,
+                                       std::function<void(const QVariant&)> callback,
+                                       QObject* owner = nullptr);
     
     /**
      * @brief 取消訂閱事件
