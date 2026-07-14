@@ -10,16 +10,16 @@ set(TEST_SOURCES
     test_httpclientpanel.cpp
 )
 
-qt_add_executable(run_tests
+qt_add_executable(scriptura_tests
     ${TEST_SOURCES}
 )
 
-set_target_properties(run_tests PROPERTIES
+set_target_properties(scriptura_tests PROPERTIES
     EXCLUDE_FROM_ALL TRUE
     FOLDER "Tests"
 )
 
-target_link_libraries(run_tests PRIVATE
+target_link_libraries(scriptura_tests PRIVATE
     scriptura_core
     Qt${QT_VERSION_MAJOR}::Test
     Qt${QT_VERSION_MAJOR}::Widgets
@@ -27,10 +27,10 @@ target_link_libraries(run_tests PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
 )
 
-target_include_directories(run_tests PRIVATE
+target_include_directories(scriptura_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/internals
     ${CMAKE_SOURCE_DIR}/src/plugins
 )
 
-add_test(NAME scriptura_unit_tests COMMAND run_tests)
+add_test(NAME scriptura_unit_tests COMMAND $<TARGET_FILE:scriptura_tests>)

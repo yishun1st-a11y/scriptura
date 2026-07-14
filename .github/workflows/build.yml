@@ -25,7 +25,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
       - name: Build unit tests
-        run: cmake --build build --config Release -j$(nproc) --target run_tests
+        run: cmake --build build --config Release -j$(nproc) --target scriptura_tests
       - name: Run unit tests
         run: cd build && ctest --output-on-failure
       - name: Bundle AppImage
@@ -85,7 +85,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
       - name: Build unit tests
-        run: cmake --build build --config Release --target run_tests
+        run: cmake --build build --config Release --target scriptura_tests
       - name: Bundle Qt dependencies
         run: macdeployqt build/scriptura.app -always-overwrite
       - name: Run unit tests
@@ -133,8 +133,8 @@ jobs:
         run: cmake --build build --config Release -j
        
       - name: Build unit tests
-        run: cmake --build build --config Release --target run_tests
-       
+        run: cmake --build build --config Release --target scriptura_tests
+
       - name: Run unit tests
         run: cd build && ctest --output-on-failure
       
