@@ -15,10 +15,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake g++ qt6-base-dev qt6-tools-dev wget file
-      - name: Download linuxdeployqt
+      - name: Download linuxdeploy
         run: |
-          wget -q https://github.com/linuxdeploy/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
-          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod a+x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
       - name: Configure
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -27,7 +28,7 @@ jobs:
         run: cmake --build build --config Release -j$(nproc) --target run_tests
       - name: Run unit tests
         run: cd build && ctest --output-on-failure
-      - name: Bundle Qt dependencies
+      - name: Bundle AppImage
         run: |
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/applications
@@ -35,7 +36,9 @@ jobs:
           cp build/scriptura AppDir/usr/bin/
           cp deployment/linux/scriptura.desktop AppDir/usr/share/applications/ || echo "No desktop file found"
           cp src/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/scriptura.png || echo "No icon found"
-          ./linuxdeployqt-continuous-x86_64.AppImage AppDir/usr/share/applications/*.desktop -appimage -always-overwrite
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE=/usr/bin/qmake6
+          ./linuxdeploy-x86_64.AppImage --plugin qt --appdir AppDir --output appimage
       - name: Create .deb package
         run: |
           sudo apt-get install -y dpkg fakeroot

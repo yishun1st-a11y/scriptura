@@ -3498,6 +3498,28 @@ void MainWindow::showEvent(QShowEvent *event)
 #include <windows.h>
 #include <dwmapi.h>
 
+void MainWindow::enableMicaEffect(HWND hwnd, bool darkMode)
+{
+    // Try Mica first (Windows 11 22H2+)
+    BOOL useMica = TRUE;
+    HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &useMica, sizeof(useMica));
+    
+    if (FAILED(hr)) {
+        // Mica not available - just enable dark mode title bar
+        BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
+    }
+    
+    // Enable rounded corners (Windows 11)
+    int cornerPreference = DWMWCP_ROUND;
+    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
+    
+    // Enable dark mode for title bar
+    BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
+}
+#endif
+
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
 {
     if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {

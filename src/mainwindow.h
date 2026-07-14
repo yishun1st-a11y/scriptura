@@ -361,6 +361,10 @@ private:
 
     Theme themeFromLegacyInt(int legacy) const;
     int themeToLegacyInt(const Theme &theme) const;
+
+#ifdef Q_OS_WIN
+    void enableMicaEffect(HWND hwnd, bool darkMode);
+#endif
 };
 
 #endif // MAINWINDOW_H

@@ -99,27 +99,6 @@ struct DWM_COLOR_PARAMS {
     COLORREF clrCaptionButtonHoverText;
     COLORREF clrCaptionButtonPressedText;
 };
-
-// Enable Mica or Acrylic material effect on Windows 11/10
-void enableMicaEffect(HWND hwnd, bool darkMode) {
-    // Try Mica first (Windows 11 22H2+)
-    BOOL useMica = TRUE;
-    HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &useMica, sizeof(useMica));
-    
-    if (FAILED(hr)) {
-        // Mica not available - just enable dark mode title bar
-        BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
-        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
-    }
-    
-    // Enable rounded corners (Windows 11)
-    int cornerPreference = DWMWCP_ROUND;
-    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
-    
-    // Enable dark mode for title bar
-    BOOL darkModeEnabled = darkMode ? TRUE : FALSE;
-    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkModeEnabled, sizeof(darkModeEnabled));
-}
 #endif // Q_OS_WIN
 
 int main(int argc, char *argv[])
@@ -724,7 +703,7 @@ QLabel#welcomeTitle {
         // Enable Mica/Acrylic effects on Windows 11+ after main window is created
 #ifdef Q_OS_WIN
         HWND hwnd = reinterpret_cast<HWND>(mainWindow->winId());
-        enableMicaEffect(hwnd, mainWindow->isDarkModeEnabled());
+        mainWindow->enableMicaEffect(hwnd, mainWindow->isDarkModeEnabled());
 #endif
     });
 

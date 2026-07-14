@@ -30,6 +30,13 @@ target_link_libraries(gitplugin PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
 )
 
+# Ensure ScripturaPlugin symbols are visible on macOS
+if(APPLE)
+    set_target_properties(gitplugin PROPERTIES
+        LINK_FLAGS "-undefined dynamic_lookup"
+    )
+endif()
+
 # 包含目錄（包含 Scriptura 標頭）
 target_include_directories(gitplugin PRIVATE
     ${CMAKE_SOURCE_DIR}/src
