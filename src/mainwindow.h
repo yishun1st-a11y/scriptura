@@ -138,6 +138,10 @@ public:
     GitPanel* getGitPanel() const { return gitPanel; }
     bool isDarkModeEnabled() const { return selectedTheme.mode == ThemeMode::Dark; }
 
+#ifdef Q_OS_WIN
+    void enableMicaEffect(HWND hwnd, bool darkMode);
+#endif
+
 protected:
     void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -362,9 +366,6 @@ private:
     Theme themeFromLegacyInt(int legacy) const;
     int themeToLegacyInt(const Theme &theme) const;
 
-#ifdef Q_OS_WIN
-    void enableMicaEffect(HWND hwnd, bool darkMode);
-#endif
 };
 
 #endif // MAINWINDOW_H

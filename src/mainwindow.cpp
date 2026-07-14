@@ -3498,6 +3498,10 @@ void MainWindow::showEvent(QShowEvent *event)
 #include <windows.h>
 #include <dwmapi.h>
 
+#ifndef DWMWA_MICA_EFFECT
+#define DWMWA_MICA_EFFECT 1029
+#endif
+
 void MainWindow::enableMicaEffect(HWND hwnd, bool darkMode)
 {
     // Try Mica first (Windows 11 22H2+)
