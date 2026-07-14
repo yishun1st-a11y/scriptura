@@ -3520,6 +3520,8 @@ void MainWindow::enableMicaEffect(HWND hwnd, bool darkMode)
 }
 #endif
 
+#ifdef Q_OS_WIN
+
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
 {
     if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {
