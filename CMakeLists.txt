@@ -44,6 +44,15 @@ file(GLOB_RECURSE SCRIPTURA_CORE_SOURCES
 list(FILTER SCRIPTURA_CORE_SOURCES EXCLUDE REGEX "src/tests/")
 list(FILTER SCRIPTURA_CORE_SOURCES EXCLUDE REGEX "src/plugins/git/")
 
+# The plugin SDK interface headers live outside src/ (in include/ and sdk/include/)
+# and contain Q_OBJECT classes (ScripturaPlugin, PluginContext). Their MOC-generated
+# code must be compiled into scriptura_core so that plugins (which link scriptura_core
+# statically) can resolve those symbols on Windows, where a DLL cannot pull symbols
+# from the host executable the way Linux/macOS plugins do at load time.
+list(APPEND SCRIPTURA_CORE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/scriptura/plugininterface.h"
+)
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(scriptura
         MANUAL_FINALIZATION
@@ -70,6 +79,10 @@ set_target_properties(scriptura_core PROPERTIES
 )
 
 target_link_libraries(scriptura_core PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::Sql)
+if(WIN32)
+    # DwmSetWindowAttribute (used by MainWindow::enableMicaEffect) lives in dwmapi.lib
+    target_link_libraries(scriptura_core PRIVATE dwmapi)
+endif()
 target_include_directories(scriptura_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/services/lsp
