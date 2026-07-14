@@ -7,19 +7,6 @@
 #include "workspace.h"
 #include "test_workspace.h"
 
-class TestWorkspace : public QObject
-{
-    Q_OBJECT
-private slots:
-    void testLoadValidWorkspace();
-    void testLoadMissingFile();
-    void testLoadInvalidJson();
-    void testSaveAndReloadRoundTrip();
-    void testAddRecentFileDedup();
-    void testAddRecentFileCapacityCap();
-    void testIsLoadedBeforeAndAfterSave();
-};
-
 void TestWorkspace::testLoadValidWorkspace()
 {
     QTemporaryDir dir;
@@ -153,4 +140,3 @@ void TestWorkspace::testIsLoadedBeforeAndAfterSave()
     QVERIFY(ws.load(path));
     QVERIFY(ws.isLoaded());
 }
-

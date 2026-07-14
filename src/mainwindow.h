@@ -216,7 +216,7 @@ private:
     QString projectDir;
     QModelIndex rootIndex;
     QList<OpenFile> openFiles;
-    QFileSystemModel *fileModel;
+    QFileSystemModel *fileModel = nullptr;
     ThemeFileIconProvider *m_fileIconProvider = nullptr;
     QToolButton *goUpButton;
     QToolButton *placeholderButton;

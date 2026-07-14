@@ -3,20 +3,6 @@
 #include "httpclientpanel.h"
 #include "test_httpclientpanel.h"
 
-class TestHttpClientPanel : public QObject
-{
-    Q_OBJECT
-private slots:
-    void testSubstituteNoEnvReturnsInputUnchanged();
-    void testSubstituteBasicVar();
-    void testSubstituteMissingVarLeavesPlaceholder();
-    void testSubstituteMultipleOccurrences();
-    void testSubstituteAdjacentVars();
-    void testSubstituteEmptyInput();
-    void testSubstituteNoMatch();
-    void testSubstituteRepeatedVar();
-};
-
 void TestHttpClientPanel::testSubstituteNoEnvReturnsInputUnchanged()
 {
     HttpClientPanel panel;
@@ -101,4 +87,3 @@ void TestHttpClientPanel::testSubstituteRepeatedVar()
     QString expect = "v1/a/v1/b";
     QCOMPARE(panel.substituteEnvVarsForTest(input), expect);
 }
-

@@ -16,6 +16,8 @@ public slots:
     void testValidateSettingsReturnsEmptyOnCleanSettings();
     void testResetInvalidSettingsRestoresDefaults();
     void testGetValidatedValueReturnsDefaultForInvalid();
+private:
+    QString m_settingsPath;
 };
 
 #endif // TEST_CONFIGVALIDATOR_H

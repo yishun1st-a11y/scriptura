@@ -6,23 +6,6 @@
 #include "configvalidator.h"
 #include "test_configvalidator.h"
 
-class TestConfigValidator : public QObject
-{
-    Q_OBJECT
-private slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void testValidTabWidthAccepted();
-    void testInvalidTabWidthRejected();
-    void testValidBooleanAccepted();
-    void testValidVersionStringAccepted();
-    void testValidateSettingsReturnsEmptyOnCleanSettings();
-    void testResetInvalidSettingsRestoresDefaults();
-    void testGetValidatedValueReturnsDefaultForInvalid();
-private:
-    QString m_settingsPath;
-};
-
 void TestConfigValidator::initTestCase()
 {
     QTemporaryDir dir;
@@ -124,4 +107,3 @@ void TestConfigValidator::testGetValidatedValueReturnsDefaultForInvalid()
     int val = validator.getValidatedValue<int>("editor/tabWidth", 4);
     QCOMPARE(val, 4);
 }
-
