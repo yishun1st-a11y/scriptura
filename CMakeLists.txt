@@ -79,6 +79,7 @@ target_include_directories(scriptura_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/internals
     ${CMAKE_CURRENT_SOURCE_DIR}/src/plugins
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/scriptura
     ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include
     ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/scriptura
     ${CMAKE_CURRENT_BINARY_DIR}
