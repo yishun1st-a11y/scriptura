@@ -917,7 +917,7 @@ MainWindow::MainWindow(const QString &initialProject, const QStringList &initial
         }
     });
     connect(m_pluginRegistry, &PluginRegistry::pluginDownloaded, this, [this](const QString &pluginId, const QByteArray &data) {
-        if (pluginManager->installPluginFromArchive(pluginId, data))
+        if (pluginManager->installPluginFromArchive(pluginId, data, this))
             statusBar()->showMessage(tr("Plugin '%1' installed.").arg(pluginId));
         else
             statusBar()->showMessage(tr("Failed to install plugin '%1'.").arg(pluginId));
@@ -3748,14 +3748,7 @@ void MainWindow::onDiagnosticsReceived(const QString &uri, const QList<LspClient
                 }
             }
             editor->setDiagnosticTooltips(diagnosticTooltips);
-
-            // Merge with existing selections (like current line highlight)
-            QList<QTextEdit::ExtraSelection> existing = editor->extraSelections();
-            // Keep only the current line highlight (first selection)
-            if (!existing.isEmpty() && existing.first().format.hasProperty(QTextFormat::FullWidthSelection)) {
-                extraSelections.prepend(existing.first());
-            }
-            editor->setExtraSelections(extraSelections);
+            editor->setDiagnostics(extraSelections);
             break;
         }
     }

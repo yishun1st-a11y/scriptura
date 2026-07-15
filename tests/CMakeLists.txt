@@ -8,6 +8,8 @@ set(TEST_SOURCES
     test_configvalidator.cpp
     test_httpclientpanel.h
     test_httpclientpanel.cpp
+    test_lengthprefixedframer.h
+    test_lengthprefixedframer.cpp
 )
 
 qt_add_executable(scriptura_tests
@@ -15,7 +17,6 @@ qt_add_executable(scriptura_tests
 )
 
 set_target_properties(scriptura_tests PROPERTIES
-    EXCLUDE_FROM_ALL TRUE
     FOLDER "Tests"
 )
 

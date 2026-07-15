@@ -7,7 +7,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
-#include <QMutex>
+#include "lengthprefixedframer.h"
 
 class DapClient : public QObject
 {
@@ -108,7 +108,6 @@ private:
     void sendRequest(const QString &method, const QJsonObject &params, int id);
     void sendNotification(const QString &method, const QJsonObject &params);
     void processMessage(const QByteArray &data);
-    QByteArray readMessage();
     void handleResponse(const QJsonObject &obj);
     void handleNotification(const QJsonObject &obj);
     void handleRequest(const QJsonObject &obj);
@@ -126,8 +125,7 @@ private:
 
 private:
     QProcess *m_process;
-    QByteArray m_buffer;
-    QMutex m_mutex;
+    LengthPrefixedFramer *m_framer;
     int m_requestId;
     int m_seq;
     QTimer *m_timeoutTimer;
@@ -135,7 +133,7 @@ private:
     QStringList m_args;
     QString m_cwd;
     int m_currentThreadId;
-    QMap<int, QString> m_pendingRequests;
+    bool m_configurationDoneSent;
 };
 
 #endif // DAPCLIENT_H

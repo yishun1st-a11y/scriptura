@@ -75,17 +75,6 @@ void PluginCrashHandler::handleCrash(const QString& pluginId)
 void PluginCrashHandler::disablePlugin(const QString& pluginId)
 {
     m_disabledPlugins[pluginId] = true;
-
-    QString settingsPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/disabled_plugins.ini";
-    QDir().mkpath(QFileInfo(settingsPath).absolutePath());
-    QSettings settings(settingsPath, QSettings::IniFormat);
-    settings.beginWriteArray("disabled");
-    int index = 0;
-    for (auto it = m_disabledPlugins.constBegin(); it != m_disabledPlugins.constEnd(); ++it) {
-        settings.setArrayIndex(index++);
-        settings.setValue("id", it.key());
-    }
-    settings.endArray();
 }
 
 QList<CrashInfo> PluginCrashHandler::recentCrashes(int limit)
@@ -104,15 +93,4 @@ bool PluginCrashHandler::isPluginDisabled(const QString& pluginId) const
 void PluginCrashHandler::enablePlugin(const QString& pluginId)
 {
     m_disabledPlugins.remove(pluginId);
-
-    QString settingsPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/disabled_plugins.ini";
-    QDir().mkpath(QFileInfo(settingsPath).absolutePath());
-    QSettings settings(settingsPath, QSettings::IniFormat);
-    settings.beginWriteArray("disabled");
-    int index = 0;
-    for (auto it = m_disabledPlugins.constBegin(); it != m_disabledPlugins.constEnd(); ++it) {
-        settings.setArrayIndex(index++);
-        settings.setValue("id", it.key());
-    }
-    settings.endArray();
 }

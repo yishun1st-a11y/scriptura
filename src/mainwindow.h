@@ -58,6 +58,7 @@
 #include "windowanimator.h"
 #include "thememanager.h"
 #include "themeicons.h"
+#include "permission.h"
 
 class DapClient;
 class DebugPanel;

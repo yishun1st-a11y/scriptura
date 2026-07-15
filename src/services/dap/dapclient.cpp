@@ -3,15 +3,20 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QDebug>
+#include <QTextDocument>
+#include <QTextBlock>
 #include <QApplication>
+#include <QPalette>
 
 DapClient::DapClient(QObject *parent)
     : QObject(parent)
     , m_process(new QProcess(this))
+    , m_framer(new LengthPrefixedFramer(this))
     , m_requestId(1)
     , m_seq(1)
     , m_timeoutTimer(new QTimer(this))
-    , m_currentThreadId(1)
+    , m_currentThreadId(0)
+    , m_configurationDoneSent(false)
 {
     m_timeoutTimer->setSingleShot(true);
     m_timeoutTimer->setInterval(30000);
@@ -34,11 +39,15 @@ bool DapClient::startServer(const QString &command, const QStringList &args)
     if (isRunning())
         return false;
 
+    m_program = command;
+    m_args = args;
     m_process->start(command, args);
+
     if (!m_process->waitForStarted(5000)) {
         emit serverFailed(tr("Failed to start debugger: %1").arg(command));
         return false;
     }
+
     m_timeoutTimer->start();
     emit serverStarted();
     emit logMessage(tr("Debugger started: %1").arg(command));
@@ -48,11 +57,12 @@ bool DapClient::startServer(const QString &command, const QStringList &args)
 void DapClient::stopServer()
 {
     if (isRunning()) {
-        disconnect();
         m_process->terminate();
         if (!m_process->waitForFinished(3000))
             m_process->kill();
     }
+    m_framer->clear();
+    m_configurationDoneSent = false;
 }
 
 void DapClient::initialize(const QString &program, const QStringList &args, const QString &cwd)
@@ -60,67 +70,70 @@ void DapClient::initialize(const QString &program, const QStringList &args, cons
     m_program = program;
     m_args = args;
     m_cwd = cwd;
+    m_configurationDoneSent = false;
 
     QJsonObject params;
-    params["clientID"] = "scriptura";
     params["adapterID"] = "scriptura";
     params["pathFormat"] = "path";
     params["linesStartAt1"] = true;
     params["columnsStartAt1"] = true;
     params["supportsVariableType"] = true;
-    params["supportsVariablePaging"] = true;
-    params["supportsRunInTerminalRequest"] = false;
+    params["supportsRunInTerminalRequest"] = true;
 
-    sendRequest("initialize", params, m_requestId);
-    m_pendingRequests[m_requestId] = "initialize";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("initialize", params, id);
 }
 
 void DapClient::launch()
 {
     QJsonObject params;
-    params["name"] = "Launch";
+    params["name"] = m_program;
     params["type"] = "scriptura";
     params["request"] = "launch";
     params["program"] = m_program;
     params["args"] = QJsonArray::fromStringList(m_args);
-    params["cwd"] = m_cwd;
-    params["stopOnEntry"] = false;
+    if (!m_cwd.isEmpty())
+        params["cwd"] = m_cwd;
 
-    sendRequest("launch", params, m_requestId);
-    m_pendingRequests[m_requestId] = "launch";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("launch", params, id);
 }
 
 void DapClient::configurationDone()
 {
+    if (m_configurationDoneSent)
+        return;
+    m_configurationDoneSent = true;
     sendNotification("configurationDone", QJsonObject{});
 }
 
 void DapClient::setBreakpoints(const QString &sourcePath, const QList<int> &lines)
 {
-    QList<Breakpoint> bps;
-    for (int line : lines) {
-        Breakpoint bp;
-        bp.line = line;
-        bps.append(bp);
-    }
-    setBreakpointsWithConditions(sourcePath, bps);
+    QJsonArray bpLines;
+    for (int line : lines)
+        bpLines.append(line);
+
+    QJsonObject params;
+    params["source"] = QJsonObject{{"path", sourcePath}};
+    params["lines"] = bpLines;
+
+    int id = m_requestId;
+    sendRequest("setBreakpoints", params, id);
 }
 
 void DapClient::setBreakpointsWithConditions(const QString &sourcePath, const QList<Breakpoint> &breakpoints)
 {
     QJsonArray bpArray;
     for (const Breakpoint &bp : breakpoints) {
-        QJsonObject bpObj;
-        bpObj["line"] = bp.line;
+        QJsonObject obj;
+        obj["line"] = bp.line;
         if (!bp.condition.isEmpty())
-            bpObj["condition"] = bp.condition;
+            obj["condition"] = bp.condition;
         if (!bp.hitCondition.isEmpty())
-            bpObj["hitCondition"] = bp.hitCondition;
+            obj["hitCondition"] = bp.hitCondition;
         if (!bp.logMessage.isEmpty())
-            bpObj["logMessage"] = bp.logMessage;
-        bpArray.append(bpObj);
+            obj["logMessage"] = bp.logMessage;
+        bpArray.append(obj);
     }
 
     QJsonObject params;
@@ -129,60 +142,54 @@ void DapClient::setBreakpointsWithConditions(const QString &sourcePath, const QL
 
     int id = m_requestId;
     sendRequest("setBreakpoints", params, id);
-    m_pendingRequests[id] = "setBreakpoints";
-    m_requestId++;
 }
 
 void DapClient::continueDebug()
 {
     QJsonObject params;
     params["threadId"] = m_currentThreadId;
-    sendRequest("continue", params, m_requestId);
-    m_pendingRequests[m_requestId] = "continue";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("continue", params, id);
 }
 
 void DapClient::next()
 {
     QJsonObject params;
     params["threadId"] = m_currentThreadId;
-    sendRequest("next", params, m_requestId);
-    m_pendingRequests[m_requestId] = "next";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("next", params, id);
 }
 
 void DapClient::stepIn()
 {
     QJsonObject params;
     params["threadId"] = m_currentThreadId;
-    sendRequest("stepIn", params, m_requestId);
-    m_pendingRequests[m_requestId] = "stepIn";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("stepIn", params, id);
 }
 
 void DapClient::stepOut()
 {
     QJsonObject params;
     params["threadId"] = m_currentThreadId;
-    sendRequest("stepOut", params, m_requestId);
-    m_pendingRequests[m_requestId] = "stepOut";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("stepOut", params, id);
 }
 
 void DapClient::pause()
 {
     QJsonObject params;
     params["threadId"] = m_currentThreadId;
-    sendRequest("pause", params, m_requestId);
-    m_pendingRequests[m_requestId] = "pause";
-    m_requestId++;
+    int id = m_requestId;
+    sendRequest("pause", params, id);
 }
 
 void DapClient::disconnect()
 {
-    sendRequest("disconnect", QJsonObject{}, m_requestId);
-    m_pendingRequests[m_requestId] = "disconnect";
-    m_requestId++;
+    QJsonObject params;
+    params["terminateDebuggee"] = true;
+    int id = m_requestId;
+    sendRequest("disconnect", params, id);
 }
 
 void DapClient::stackTrace(int threadId)
@@ -193,8 +200,6 @@ void DapClient::stackTrace(int threadId)
     params["levels"] = 100;
     int id = m_requestId;
     sendRequest("stackTrace", params, id);
-    m_pendingRequests[id] = "stackTrace";
-    m_requestId++;
 }
 
 void DapClient::scopes(int frameId)
@@ -203,8 +208,6 @@ void DapClient::scopes(int frameId)
     params["frameId"] = frameId;
     int id = m_requestId;
     sendRequest("scopes", params, id);
-    m_pendingRequests[id] = "scopes";
-    m_requestId++;
 }
 
 void DapClient::variables(int variablesReference)
@@ -213,8 +216,6 @@ void DapClient::variables(int variablesReference)
     params["variablesReference"] = variablesReference;
     int id = m_requestId;
     sendRequest("variables", params, id);
-    m_pendingRequests[id] = "variables";
-    m_requestId++;
 }
 
 void DapClient::evaluate(const QString &expression, int frameId, const QString &context)
@@ -225,20 +226,16 @@ void DapClient::evaluate(const QString &expression, int frameId, const QString &
     params["context"] = context;
     int id = m_requestId;
     sendRequest("evaluate", params, id);
-    m_pendingRequests[id] = "evaluate";
-    m_requestId++;
 }
 
 void DapClient::onProcessReadyRead()
 {
-    QMutexLocker locker(&m_mutex);
-    m_buffer.append(m_process->readAllStandardOutput());
-    locker.unlock();
+    m_framer->append(m_process->readAllStandardOutput());
 
     m_timeoutTimer->start();
 
-    while (true) {
-        QByteArray msg = readMessage();
+    while (m_framer->canReadMessage()) {
+        QByteArray msg = m_framer->readMessage();
         if (msg.isEmpty())
             break;
         processMessage(msg);
@@ -269,15 +266,12 @@ void DapClient::onTimeout()
 void DapClient::sendMessage(const QJsonObject &msg)
 {
     QByteArray data = QJsonDocument(msg).toJson(QJsonDocument::Compact);
-    int contentLength = data.size();
-    QByteArray header = QString("Content-Length: %1\r\n"
-                                "Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n"
-                                "\r\n").arg(contentLength).toUtf8();
-    m_process->write(header + data);
+    m_process->write(LengthPrefixedFramer::frame(data));
 }
 
 void DapClient::sendRequest(const QString &method, const QJsonObject &params, int id)
 {
+    Q_UNUSED(id)
     QJsonObject obj;
     obj["seq"] = m_seq++;
     obj["type"] = "request";
@@ -290,7 +284,7 @@ void DapClient::sendNotification(const QString &method, const QJsonObject &param
 {
     QJsonObject obj;
     obj["seq"] = m_seq++;
-    obj["type"] = "request";
+    obj["type"] = "notification";
     obj["command"] = method;
     obj["arguments"] = params;
     sendMessage(obj);
@@ -307,12 +301,12 @@ void DapClient::processMessage(const QByteArray &data)
     if (doc.isObject()) {
         QJsonObject obj = doc.object();
         if (obj.contains("seq")) {
-            int seq = obj["seq"].toInt();
-            if (obj["type"].toString() == "response") {
+            QString type = obj["type"].toString();
+            if (type == "response") {
                 handleResponse(obj);
-            } else if (obj["type"].toString() == "event") {
+            } else if (type == "event") {
                 processEvent(obj);
-            } else if (obj["type"].toString() == "request") {
+            } else if (type == "request") {
                 handleRequest(obj);
             }
         }
@@ -332,9 +326,9 @@ void DapClient::handleResponse(const QJsonObject &obj)
     }
 
     if (command == "initialize") {
-        // initialized is emitted by the "initialized" event, not the response
+        emit initialized();
     } else if (command == "launch") {
-        configurationDone();
+        // configurationDone is now sent on the "initialized" event per DAP spec
     } else if (command == "stackTrace") {
         QList<StackFrame> frames;
         QJsonArray arr = obj["body"].toObject()["stackFrames"].toArray();
@@ -379,6 +373,7 @@ void DapClient::processEvent(const QJsonObject &event)
 {
     QString eventName = event["event"].toString();
     if (eventName == "initialized") {
+        configurationDone();
         emit initialized();
     } else if (eventName == "stopped") {
         QJsonObject body = event["body"].toObject();
@@ -405,30 +400,6 @@ void DapClient::processEvent(const QJsonObject &event)
     }
 }
 
-QByteArray DapClient::readMessage()
-{
-    QMutexLocker locker(&m_mutex);
-    int headerEnd = m_buffer.indexOf("\r\n\r\n");
-    if (headerEnd == -1)
-        return QByteArray();
-
-    QByteArray header = m_buffer.left(headerEnd);
-    m_buffer.remove(0, headerEnd + 4);
-
-    QRegularExpression re("Content-Length: (\\d+)", QRegularExpression::CaseInsensitiveOption);
-    QRegularExpressionMatch match = re.match(header);
-    if (!match.hasMatch())
-        return QByteArray();
-
-    int contentLength = match.captured(1).toInt();
-    if (m_buffer.size() < contentLength)
-        return QByteArray();
-
-    QByteArray msg = m_buffer.left(contentLength);
-    m_buffer.remove(0, contentLength);
-    return msg;
-}
-
 QJsonObject DapClient::createRequest(const QString &method, const QJsonObject &params, int id)
 {
     QJsonObject obj;
@@ -443,7 +414,7 @@ QJsonObject DapClient::createNotification(const QString &method, const QJsonObje
 {
     QJsonObject obj;
     obj["seq"] = m_seq++;
-    obj["type"] = "request";
+    obj["type"] = "notification";
     obj["command"] = method;
     obj["arguments"] = params;
     return obj;
@@ -454,24 +425,20 @@ QJsonObject DapClient::createResponse(int id, const QJsonValue &result)
     QJsonObject obj;
     obj["seq"] = m_seq++;
     obj["type"] = "response";
-    obj["request_seq"] = id;
-    obj["success"] = true;
     obj["command"] = "";
-    obj["body"] = result;
+    obj["success"] = true;
+    obj["body"] = QJsonObject{{"result", result}};
     return obj;
 }
 
 QJsonObject DapClient::createErrorResponse(int id, int code, const QString &message)
 {
-    QJsonObject body;
-    body["error"] = QJsonObject{{"id", code}, {"message", message}};
     QJsonObject obj;
     obj["seq"] = m_seq++;
     obj["type"] = "response";
-    obj["request_seq"] = id;
-    obj["success"] = false;
     obj["command"] = "";
-    obj["body"] = body;
+    obj["success"] = false;
+    obj["body"] = QJsonObject{{"error", QJsonObject{{"code", code}, {"message", message}}}};
     return obj;
 }
 
@@ -491,9 +458,12 @@ DapClient::StackFrame DapClient::parseStackFrame(const QJsonObject &obj) const
     frame.id = obj["id"].toInt();
     frame.name = obj["name"].toString();
     frame.line = obj["line"].toInt();
-    frame.source = {obj["source"].toObject()["name"].toString(),
-                    obj["source"].toObject()["path"].toString(),
-                    obj["source"].toObject()["sourceReference"].toInt()};
+    if (obj.contains("source")) {
+        QJsonObject src = obj["source"].toObject();
+        frame.source.name = src["name"].toString();
+        frame.source.path = src["path"].toString();
+        frame.source.sourceReference = src["sourceReference"].toInt();
+    }
     return frame;
 }
 

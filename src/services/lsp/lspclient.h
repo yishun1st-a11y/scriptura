@@ -7,11 +7,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
-#include <QMutex>
-#include <QWaitCondition>
 #include <QTextEdit>
 #include <QMap>
-#include <QSet>
+#include "lengthprefixedframer.h"
 
 class LspClient : public QObject
 {
@@ -49,7 +47,6 @@ public:
 
     bool isRunning() const { return m_process && m_process->state() == QProcess::Running; }
 
-    // LSP Methods
     void initialize(const QString &rootUri, const QString &languageId);
     void initialized();
     void didOpen(const QString &uri, const QString &languageId, const QString &text);
@@ -58,7 +55,6 @@ public:
     void shutdown();
     void exit();
 
-    // LSP Requests
     void completion(const QString &uri, const Position &pos);
     void definition(const QString &uri, const Position &pos);
     void hover(const QString &uri, const Position &pos);
@@ -74,7 +70,6 @@ public:
     void typeDefinition(const QString &uri, const Position &pos);
     void implementation(const QString &uri, const Position &pos);
 
-    // Diagnostics
     QList<Diagnostic> diagnosticsForFile(const QString &uri) const;
     void clearDiagnostics(const QString &uri);
 
@@ -122,22 +117,10 @@ private slots:
     void onTimeout();
 
 private:
-    enum MessageType { Request = 1, Response = 2, Notification = 3 };
-
-    struct LspMessage {
-        MessageType type;
-        int id;
-        QString method;
-        QJsonObject params;
-        QJsonObject result;
-        QJsonObject error;
-    };
-
     void sendMessage(const QJsonObject &msg);
     void sendRequest(const QString &method, const QJsonObject &params, int id);
     void sendNotification(const QString &method, const QJsonObject &params);
     void processMessage(const QByteArray &data);
-    QByteArray readMessage();
     void handleResponse(const QJsonObject &obj);
     void handleNotification(const QJsonObject &obj);
     void handleRequest(const QJsonObject &obj);
@@ -153,8 +136,7 @@ public:
                                                                 const QTextDocument *doc) const;
 
     QProcess *m_process;
-    QByteArray m_buffer;
-    QMutex m_mutex;
+    LengthPrefixedFramer *m_framer;
     int m_requestId;
     int m_initialized;
     QString m_rootUri;

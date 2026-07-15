@@ -3,6 +3,7 @@
 #include "servicelocator.h"
 #include "pluginmanager.h"
 #include "mainwindow.h"
+#include "permission.h"
 #include <QDebug>
 #include <QApplication>
 
@@ -11,7 +12,6 @@ PluginContext::PluginContext(MainWindow* mainWindow, QObject* parent)
     , m_mainWindow(mainWindow)
     , m_settings(nullptr)
 {
-    // 初始化 QSettings
     if (mainWindow) {
         m_settings = new QSettings(this);
     }
@@ -23,23 +23,48 @@ PluginContext::~PluginContext()
 
 MainWindow* PluginContext::mainWindow() const
 {
+    if (!m_permissionManager || !m_currentPluginId.isEmpty()) {
+        QString pid = m_currentPluginId;
+        if (m_permissionManager && !m_permissionManager->checkPermission(pid, Permission::SystemSettings)) {
+            qWarning() << "Plugin" << pid << "denied access to mainWindow (SystemSettings)";
+            return nullptr;
+        }
+    }
     return m_mainWindow;
 }
 
 QSettings* PluginContext::settings() const
 {
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::SystemSettings)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to settings (SystemSettings)";
+            return nullptr;
+        }
+    }
     return m_settings;
 }
 
 CodeEditor* PluginContext::currentEditor() const
 {
     if (!m_mainWindow) return nullptr;
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::FileRead)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to currentEditor (FileRead)";
+            return nullptr;
+        }
+    }
     return m_mainWindow->getCurrentCodeEditor();
 }
 
 LspClient* PluginContext::lspClient() const
 {
     if (!m_mainWindow) return nullptr;
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::ProcessExecution)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to lspClient (ProcessExecution)";
+            return nullptr;
+        }
+    }
     return m_mainWindow->getLspClient();
 }
 
@@ -52,29 +77,45 @@ ProblemPanel* PluginContext::problemPanel() const
 TerminalPanel* PluginContext::terminalPanel() const
 {
     if (!m_mainWindow) return nullptr;
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::ProcessExecution)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to terminalPanel (ProcessExecution)";
+            return nullptr;
+        }
+    }
     return m_mainWindow->getTerminalPanel();
 }
 
 GitPanel* PluginContext::gitPanel() const
 {
     if (!m_mainWindow) return nullptr;
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::ProcessExecution)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to gitPanel (ProcessExecution)";
+            return nullptr;
+        }
+    }
     return m_mainWindow->getGitPanel();
 }
 
 QString PluginContext::currentProjectPath() const
 {
     if (!m_mainWindow) return QString();
+    if (m_permissionManager && !m_currentPluginId.isEmpty()) {
+        if (!m_permissionManager->checkPermission(m_currentPluginId, Permission::FileRead)) {
+            qWarning() << "Plugin" << m_currentPluginId << "denied access to currentProjectPath (FileRead)";
+            return QString();
+        }
+    }
     return m_mainWindow->currentProjectPath();
 }
 
 QObject* PluginContext::getPlugin(const QString& id) const
 {
-    // 通過 PluginManager 獲取插件實例
     PluginManager* manager = qApp->findChild<PluginManager*>();
     if (manager) {
         ScripturaPlugin* plugin = manager->getPlugin(id);
         if (plugin) {
-            // ScripturaPlugin 現在繼承 QObject，可以直接轉換
             return qobject_cast<QObject*>(plugin);
         }
     }
@@ -88,18 +129,22 @@ void PluginContext::notify(const QString& event, const QVariant& data)
 
 EventBus::SubscriptionId PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback, QObject* owner)
 {
-    // 訂閱事件並儲存訂閱 ID (綁定擁有者生命週期，避免 use-after-free)
     EventBus::SubscriptionId id = EventBus::instance()->subscribe(event, owner, callback);
+    m_eventHandlers[event].append({id, callback});
+    return id;
+}
+
+EventBus::SubscriptionId PluginContext::subscribe(const QString& event, std::function<void(const QVariant&)> callback)
+{
+    EventBus::SubscriptionId id = EventBus::instance()->subscribe(event, nullptr, callback);
     m_eventHandlers[event].append({id, callback});
     return id;
 }
 
 void PluginContext::unsubscribe(const QString& event, EventBus::SubscriptionId subscriptionId)
 {
-    // 從 EventBus 取消訂閱
     EventBus::instance()->unsubscribe(event, subscriptionId);
     
-    // 從本地記錄中移除
     auto& subscriptions = m_eventHandlers[event];
     for (auto it = subscriptions.begin(); it != subscriptions.end(); ++it) {
         if (it->id == subscriptionId) {
@@ -108,8 +153,36 @@ void PluginContext::unsubscribe(const QString& event, EventBus::SubscriptionId s
         }
     }
     
-    // 如果沒有訂閱者了，移除該事件
     if (subscriptions.isEmpty()) {
         m_eventHandlers.remove(event);
     }
+}
+
+void PluginContext::setPermissionManager(PermissionManager* manager)
+{
+    m_permissionManager = manager;
+}
+
+QString PluginContext::currentPluginId() const
+{
+    return m_currentPluginId;
+}
+
+void PluginContext::setCurrentPluginId(const QString& pluginId)
+{
+    m_currentPluginId = pluginId;
+}
+
+bool PluginContext::hasPermission(const QString& pluginId, Permission permission) const
+{
+    if (!m_permissionManager)
+        return true;
+    return m_permissionManager->checkPermission(pluginId, permission);
+}
+
+void PluginContext::requestPermission(const QString& pluginId, Permission permission)
+{
+    if (!m_permissionManager)
+        return;
+    m_permissionManager->requestPermission(pluginId, permission);
 }

@@ -17,6 +17,8 @@
 #include <functional>
 #include "plugininterface.h"
 #include "dependencyresolver.h"
+#include "permission.h"
+#include "plugincrashhandler.h"
 
 /**
  * @file pluginmanager.h
@@ -27,6 +29,8 @@
  * - 依賴解析和載入順序計算
  * - 插件生命週期管理
  * - 事件系統協調
+ * - 權限管理
+ * - 沙箱外掛程序隔離
  */
 
 /**
@@ -39,6 +43,8 @@
  * - 處理插件依賴關係
  * - 管理插件載入順序
  * - 處理插件事件
+ * - 強制執行插件權限
+ * - 外掛程序隔離（sandbox 模式）
  */
 class PluginManager : public QObject
 {
@@ -89,7 +95,7 @@ public:
      * @param archiveData 下載的壓縮包位元組
      * @return 成功返回 true
      */
-    bool installPluginFromArchive(const QString& pluginId, const QByteArray& archiveData);
+    bool installPluginFromArchive(const QString& pluginId, const QByteArray& archiveData, QWidget* parent = nullptr);
 
     /**
      * @brief 插件安裝目錄
@@ -202,6 +208,27 @@ public:
       * @brief 載入停用的插件列表
       */
      void loadDisabledPlugins();
+
+     /**
+      * @brief 檢查插件是否有足夠權限執行操作
+      * @param pluginId 插件 ID
+      * @param permission 要檢查的權限
+      * @return 有權限返回 true
+      */
+     bool checkPermission(const QString& pluginId, Permission permission) const;
+     
+     /**
+      * @brief 設定權限管理器
+      * @param manager 權限管理器指標
+      */
+     void setPermissionManager(PermissionManager* manager);
+     
+     /**
+      * @brief 設定外掛程序當機處理器
+      * @param handler 處理器指標
+      */
+     void setCrashHandler(PluginCrashHandler* handler);
+    void onPluginCrashed(const QString& pluginId, const CrashInfo& info);
 
      // 功能查詢
     
@@ -391,8 +418,11 @@ private:
     quint64 m_nextSubscriptionId = 1;                               ///< 下一個訂閱 ID
     PluginContext* m_context = nullptr;                             ///< 插件上下文
     mutable QRecursiveMutex m_mutex;                               ///< 執行緒安全鎖（遞歸，避免內部呼叫重入死鎖）
+    QScopedPointer<PluginCrashHandler> m_crashHandler;             ///< 外掛程式崩潰處理器
+    PermissionManager* m_permissionManager = nullptr;              ///< 權限管理器
     
     static const QString DISABLED_PLUGINS_FILE;                      ///< 停用插件列表檔案名稱
+    static const QString DISABLED_PLUGINS_INI;                       ///< 停用插件列表 INI 檔案名稱（已棄用）
 };
 
 #endif // PLUGINMANAGER_H

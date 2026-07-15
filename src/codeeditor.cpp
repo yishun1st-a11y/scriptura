@@ -63,10 +63,6 @@ void CodeHighlighter::setLanguage(const QString &newLanguage)
 {
     language = newLanguage.toLower();
     rules.clear();
-    inBlockComment = false;
-    inTripleString = false;
-    inHtmlComment = false;
-    tripleDelimiter.clear();
 
     if (language == "python")
         setupPython();
@@ -147,20 +143,20 @@ void CodeHighlighter::setThemeColors(const QColor &keyword, const QColor &string
 
 void CodeHighlighter::highlightBlock(const QString &text)
 {
-    // Performance optimization: skip highlighting for very long lines
     if (text.length() > 10000) {
+        setCurrentBlockState(BlockNormal);
         return;
     }
 
     if (language == "c" || language == "cpp" || language == "java" || language == "javascript" || language == "typescript" || language == "rust" || language == "go" || language == "css" || language == "script") {
         handleCStyleBlockComment(text);
-        if (inBlockComment)
+        if (currentBlockState() == BlockInComment)
             return;
     }
 
-    if (language == "html" && inHtmlComment) {
+    if (language == "html" && previousBlockState() == BlockInHtmlComment) {
         handleHtmlComment(text);
-        if (inHtmlComment)
+        if (currentBlockState() == BlockInHtmlComment)
             return;
     }
 
@@ -435,14 +431,15 @@ void CodeHighlighter::handleCStyleBlockComment(const QString &text)
 {
     int index = 0;
 
-    if (inBlockComment) {
+    if (previousBlockState() == BlockInComment) {
         index = text.indexOf("*/");
         if (index >= 0) {
             setFormat(0, index + 2, commentFormat);
-            inBlockComment = false;
+            setCurrentBlockState(BlockNormal);
             index = 0;
         } else {
             setFormat(0, text.length(), commentFormat);
+            setCurrentBlockState(BlockInComment);
             return;
         }
     }
@@ -457,31 +454,46 @@ void CodeHighlighter::handleCStyleBlockComment(const QString &text)
             index = end + 2;
         } else {
             length = text.length() - start;
-            inBlockComment = true;
+            setCurrentBlockState(BlockInComment);
         }
 
         setFormat(start, length, commentFormat);
 
-        if (inBlockComment)
+        if (currentBlockState() == BlockInComment)
             return;
     }
 }
 
 void CodeHighlighter::handlePythonTripleString(const QString &text)
 {
-    if (inTripleString) {
-        const int end = text.indexOf(tripleDelimiter);
+    int start = 0;
+    BlockState prevState = static_cast<BlockState>(previousBlockState());
+
+    if (prevState == BlockInTripleDouble) {
+        const int end = text.indexOf("\"\"\"");
         if (end >= 0) {
             setFormat(0, end + 3, stringFormat);
-            inTripleString = false;
-            tripleDelimiter.clear();
+            start = end + 3;
+            setCurrentBlockState(BlockNormal);
         } else {
             setFormat(0, text.length(), stringFormat);
+            setCurrentBlockState(BlockInTripleDouble);
+            return;
+        }
+    } else if (prevState == BlockInTripleSingle) {
+        const int end = text.indexOf("'''");
+        if (end >= 0) {
+            setFormat(0, end + 3, stringFormat);
+            start = end + 3;
+            setCurrentBlockState(BlockNormal);
+        } else {
+            setFormat(0, text.length(), stringFormat);
+            setCurrentBlockState(BlockInTripleSingle);
             return;
         }
     }
 
-    QRegularExpressionMatchIterator iterator = QRegularExpression("\"\"\"|'''").globalMatch(text);
+    QRegularExpressionMatchIterator iterator = QRegularExpression("\"\"\"|'''").globalMatch(text, start);
     while (iterator.hasNext()) {
         QRegularExpressionMatch match = iterator.next();
         const QString delimiter = match.captured(0);
@@ -490,10 +502,10 @@ void CodeHighlighter::handlePythonTripleString(const QString &text)
 
         if (end >= 0) {
             setFormat(matchStart, end + 3 - matchStart, stringFormat);
+            start = end + 3;
         } else {
             setFormat(matchStart, text.length() - matchStart, stringFormat);
-            inTripleString = true;
-            tripleDelimiter = delimiter;
+            setCurrentBlockState(delimiter == "\"\"\"" ? BlockInTripleDouble : BlockInTripleSingle);
             return;
         }
     }
@@ -501,34 +513,37 @@ void CodeHighlighter::handlePythonTripleString(const QString &text)
 
 void CodeHighlighter::handleHtmlComment(const QString &text)
 {
-    if (inHtmlComment) {
+    int start = 0;
+
+    if (previousBlockState() == BlockInHtmlComment) {
         const int end = text.indexOf("-->");
         if (end >= 0) {
             setFormat(0, end + 3, commentFormat);
-            inHtmlComment = false;
+            start = end + 3;
+            setCurrentBlockState(BlockNormal);
         } else {
             setFormat(0, text.length(), commentFormat);
+            setCurrentBlockState(BlockInHtmlComment);
             return;
         }
     }
 
-    int index = 0;
-    while ((index = text.indexOf("<!--", index)) >= 0) {
-        const int start = index;
-        const int end = text.indexOf("-->", index + 4);
+    while ((start = text.indexOf("<!--", start)) >= 0) {
+        const int blockStart = start;
+        const int end = text.indexOf("-->", start + 4);
         int length;
 
         if (end >= 0) {
-            length = end + 4 - start;
-            index = end + 4;
+            length = end + 4 - blockStart;
+            start = end + 4;
         } else {
-            length = text.length() - start;
-            inHtmlComment = true;
+            length = text.length() - blockStart;
+            setCurrentBlockState(BlockInHtmlComment);
         }
 
-        setFormat(start, length, commentFormat);
+        setFormat(blockStart, length, commentFormat);
 
-        if (inHtmlComment)
+        if (currentBlockState() == BlockInHtmlComment)
             return;
     }
 }
@@ -922,20 +937,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event)
 void CodeEditor::setDiagnostics(const QList<QTextEdit::ExtraSelection> &diags)
 {
     m_diagnosticSelections = diags;
-    // Merge with current extra selections (current line highlight)
-    QList<QTextEdit::ExtraSelection> selections;
-    QList<QTextEdit::ExtraSelection> existing = extraSelections();
-
-    // Keep current line highlight (first selection with FullWidthSelection)
-    for (const QTextEdit::ExtraSelection &sel : existing) {
-        if (sel.format.hasProperty(QTextFormat::FullWidthSelection)) {
-            selections.append(sel);
-            break;
-        }
-    }
-
-    selections.append(diags);
-    setExtraSelections(selections);
+    updateAllSelections();
 }
 
 void CodeEditor::setDiagnosticTooltips(const QList<QPair<QTextCursor, QString>> &tips)
@@ -972,13 +974,16 @@ void CodeEditor::mouseMoveEvent(QMouseEvent *event)
     if (event->modifiers() & Qt::AltModifier) {
         QTextCursor cursor = cursorForPosition(event->pos());
         cursor.select(QTextCursor::WordUnderCursor);
-        QTextEdit::ExtraSelection sel;
-        sel.cursor = cursor;
-        QColor color = palette().color(QPalette::Highlight);
-        sel.format.setBackground(QColor(color.red(), color.green(), color.blue(), 80));
-        if (m_extraCursors.isEmpty() || m_extraCursors.last().cursor.selectionStart() != cursor.selectionStart()) {
-            m_extraCursors.append(sel);
-            updateAllSelections();
+
+        bool duplicate = false;
+        for (const QTextCursor &existing : m_multiCursor->cursors()) {
+            if (existing.selectionStart() == cursor.selectionStart()) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) {
+            m_multiCursor->addCursor(cursor);
         }
     } else {
         updateHoverTooltip(event->pos());

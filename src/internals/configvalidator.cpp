@@ -15,15 +15,20 @@ void ConfigValidator::initializeRules()
     // Theme settings validation
     m_rules["theme/selected"] = {
         "theme/selected", 0,
-        [](const QVariant &v) { return v.canConvert<int>() && v.toInt() >= 0 && v.toInt() <= 100; },
-        "Theme value must be an integer between 0 and 100"
+        [](const QVariant &v) { return v.canConvert<int>() && v.toInt() >= 0 && v.toInt() <= 29; },
+        "Theme value must be an integer between 0 and 29"
     };
 
     // Editor settings validation
     m_rules["editor/font"] = {
         "editor/font", QVariant(),
-        [](const QVariant &v) { return v.isNull() || v.canConvert<QFont>(); },
-        "Font setting must be a valid QFont"
+        [](const QVariant &v) {
+            if (v.isNull())
+                return true;
+            QFont f = qvariant_cast<QFont>(v);
+            return !f.family().isEmpty();
+        },
+        "Font setting must be a valid QFont with a non-empty family"
     };
 
     m_rules["editor/tabWidth"] = {

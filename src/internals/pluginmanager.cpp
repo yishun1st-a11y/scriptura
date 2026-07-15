@@ -1,22 +1,29 @@
 #include "pluginmanager.h"
+#include "plugincontext.h"
 #include "eventbus.h"
 #include "servicelocator.h"
 #include "versionfetcher.h"
+#include "plugincrashhandler.h"
 #include <QDebug>
 #include <QJsonArray>
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QProcess>
 #include <QDir>
+#include <QMessageBox>
 
 const QString PluginManager::DISABLED_PLUGINS_FILE = "disabled_plugins.json";
 
 PluginManager::PluginManager(QObject* parent)
     : QObject(parent)
     , m_context(nullptr)
+    , m_crashHandler(new PluginCrashHandler(this))
 {
     QMutexLocker locker(&m_mutex);
     loadDisabledPlugins();
+
+    connect(m_crashHandler.data(), &PluginCrashHandler::pluginCrashed,
+            this, &PluginManager::onPluginCrashed);
 }
 
 PluginManager::~PluginManager()
@@ -30,6 +37,42 @@ void PluginManager::setContext(PluginContext* context)
 {
     QMutexLocker locker(&m_mutex);
     m_context = context;
+}
+
+void PluginManager::setPermissionManager(PermissionManager* manager)
+{
+    QMutexLocker locker(&m_mutex);
+    m_permissionManager = manager;
+}
+
+void PluginManager::setCrashHandler(PluginCrashHandler* handler)
+{
+    QMutexLocker locker(&m_mutex);
+    // Disconnect old handler if it exists
+    if (m_crashHandler) {
+        disconnect(m_crashHandler.data(), &PluginCrashHandler::pluginCrashed, this, &PluginManager::onPluginCrashed);
+    }
+    m_crashHandler.reset(handler);
+    // Connect new handler
+    if (m_crashHandler) {
+        connect(m_crashHandler.data(), &PluginCrashHandler::pluginCrashed, this, &PluginManager::onPluginCrashed);
+    }
+}
+
+bool PluginManager::checkPermission(const QString& pluginId, Permission permission) const
+{
+    QMutexLocker locker(&m_mutex);
+    if (!m_permissionManager)
+        return true;
+    return m_permissionManager->checkPermission(pluginId, permission);
+}
+
+void PluginManager::onPluginCrashed(const QString& pluginId, const CrashInfo& info)
+{
+    QMutexLocker locker(&m_mutex);
+    qWarning() << "Plugin" << pluginId << "crashed:" << info.errorType;
+    disablePlugin(pluginId);
+    emit pluginError(pluginId, QObject::tr("Plugin crashed: %1").arg(info.errorType));
 }
 
 bool PluginManager::loadPlugins(const QString& pluginPath)
@@ -437,6 +480,13 @@ void PluginManager::initializePlugins()
     for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it) {
         if (it->instance && !it->initialized) {
             if (m_context) {
+                m_context->setCurrentPluginId(it.key());
+                if (m_permissionManager) {
+                    QList<Permission> declared = m_permissionManager->declaredPermissions(it.key());
+                    for (Permission p : declared) {
+                        m_permissionManager->grantPermission(it.key(), p);
+                    }
+                }
                 bool ok = false;
                 try {
                     ok = it->instance->initialize(m_context);
@@ -444,6 +494,7 @@ void PluginManager::initializePlugins()
                     qWarning() << "Exception during plugin initialization:" << it.key() << e.what();
                     ok = false;
                 }
+                m_context->setCurrentPluginId(QString());
                 if (ok) {
                     it->initialized = true;
                     setupPluginConnections(it->instance);
@@ -723,7 +774,7 @@ QString PluginManager::pluginsInstallDir() const
     return dir;
 }
 
-bool PluginManager::installPluginFromArchive(const QString &pluginId, const QByteArray &archiveData)
+bool PluginManager::installPluginFromArchive(const QString &pluginId, const QByteArray &archiveData, QWidget* parent)
 {
     QMutexLocker locker(&m_mutex);
     
@@ -756,8 +807,44 @@ bool PluginManager::installPluginFromArchive(const QString &pluginId, const QByt
     if (!extracted)
         return false;
 
+    QJsonObject metadata;
+    if (!loadPluginMetadata(targetDir, metadata)) {
+        QDir(targetDir).removeRecursively();
+        return false;
+    }
+
+    QString name = metadata["name"].toString(pluginId);
+    QString version = metadata["version"].toString("?");
+    QString author = metadata["author"].toString("?");
+    QString description = metadata["description"].toString();
+    QString permissions;
+    if (metadata.contains("permissions")) {
+        QJsonArray perms = metadata["permissions"].toArray();
+        for (const QJsonValue &v : perms)
+            permissions += "  - " + v.toString() + "\n";
+    }
+    if (permissions.isEmpty())
+        permissions = "  (none declared)\n";
+
+    QString info = QObject::tr("Plugin: %1\nVersion: %2\nAuthor: %3\n\nDescription:\n%4\n\nDeclared permissions:\n%5\n\nPlugins run with full access to your files and system. Only install plugins from sources you trust.")
+                       .arg(name, version, author, description, permissions);
+
+    QMessageBox::StandardButton trust = QMessageBox::question(
+        parent,
+        QObject::tr("Install Plugin"),
+        info,
+        QMessageBox::Yes | QMessageBox::No);
+    if (trust != QMessageBox::Yes) {
+        QDir(targetDir).removeRecursively();
+        return false;
+    }
+
     addAllowedPlugin(pluginId);
     m_pluginPaths.remove(pluginId);
-    loadPluginById(pluginId);
-    return true;
+
+    bool loaded = loadPluginById(pluginId);
+    if (!loaded) {
+        QDir(targetDir).removeRecursively();
+    }
+    return loaded;
 }

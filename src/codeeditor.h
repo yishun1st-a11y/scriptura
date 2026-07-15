@@ -60,10 +60,7 @@ private:
 
     QString language;
     QVector<HighlightingRule> rules;
-    bool inBlockComment = false;
-    bool inTripleString = false;
-    bool inHtmlComment = false;
-    QString tripleDelimiter;
+    enum BlockState { BlockNormal = 0, BlockInComment = 1, BlockInTripleDouble = 2, BlockInTripleSingle = 3, BlockInHtmlComment = 4 };
     bool darkMode = false;
 
     QTextCharFormat keywordFormat;

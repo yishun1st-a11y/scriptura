@@ -7,16 +7,18 @@
 #include <QTextBlock>
 #include <QApplication>
 #include <QPalette>
+#include <QCoreApplication>
 
 LspClient::LspClient(QObject *parent)
     : QObject(parent)
     , m_process(new QProcess(this))
+    , m_framer(new LengthPrefixedFramer(this))
     , m_requestId(1)
     , m_initialized(0)
     , m_timeoutTimer(new QTimer(this))
 {
     m_timeoutTimer->setSingleShot(true);
-    m_timeoutTimer->setInterval(30000); // 30 second timeout
+    m_timeoutTimer->setInterval(30000);
 
     connect(m_process, &QProcess::readyReadStandardOutput, this, &LspClient::onProcessReadyRead);
     connect(m_process, QOverload<QProcess::ProcessError>::of(&QProcess::errorOccurred),
@@ -330,14 +332,12 @@ void LspClient::clearDiagnostics(const QString &uri)
 
 void LspClient::onProcessReadyRead()
 {
-    QMutexLocker locker(&m_mutex);
-    m_buffer.append(m_process->readAllStandardOutput());
-    locker.unlock();
+    m_framer->append(m_process->readAllStandardOutput());
 
     m_timeoutTimer->start();
 
-    while (true) {
-        QByteArray msg = readMessage();
+    while (m_framer->canReadMessage()) {
+        QByteArray msg = m_framer->readMessage();
         if (msg.isEmpty())
             break;
         processMessage(msg);
@@ -368,8 +368,7 @@ void LspClient::onTimeout()
 void LspClient::sendMessage(const QJsonObject &msg)
 {
     QByteArray data = QJsonDocument(msg).toJson(QJsonDocument::Compact);
-    QByteArray header = QString("Content-Length: %1\r\n\r\n").arg(data.size()).toUtf8();
-    m_process->write(header + data);
+    m_process->write(LengthPrefixedFramer::frame(data));
 }
 
 void LspClient::sendRequest(const QString &method, const QJsonObject &params, int id)
@@ -394,22 +393,21 @@ void LspClient::processMessage(const QByteArray &data)
 
     if (doc.isObject()) {
         QJsonObject obj = doc.object();
-        if (obj.contains("id")) {
-            // Response to our request.
-            // NOTE: handleResponse() already locks m_mutex internally; do NOT
-            // lock it here too, otherwise we self-deadlock on this non-recursive
-            // mutex (the GUI thread would freeze on the first LSP response).
+        bool hasId = obj.contains("id");
+        bool hasMethod = obj.contains("method");
+        bool hasResult = obj.contains("result");
+        bool hasError = obj.contains("error");
+
+        if (hasId && (hasResult || hasError)) {
             handleResponse(obj);
-        } else if (obj.contains("method")) {
-            // Notification from server (e.g., textDocument/publishDiagnostics)
+        } else if (hasMethod && hasId) {
+            handleRequest(obj);
+        } else if (hasMethod) {
             QString method = obj["method"].toString();
-            if (method.startsWith("$/")) {
-                // Custom request from server (ignore for now)
-            } else {
+            if (!method.startsWith("$/")) {
                 handleNotification(obj);
             }
         } else {
-            // Unknown message type
             emit logMessage(tr("LSP: Received unknown message type"));
         }
     }
@@ -418,11 +416,7 @@ void LspClient::processMessage(const QByteArray &data)
 void LspClient::handleResponse(const QJsonObject &obj)
 {
     int id = obj["id"].toInt();
-    QString method;
-    {
-        QMutexLocker locker(&m_mutex);
-        method = m_pendingRequests.take(id);
-    }
+    QString method = m_pendingRequests.take(id);
 
     if (obj.contains("error") && !obj["error"].isNull()) {
         QJsonObject err = obj["error"].toObject();
@@ -436,10 +430,22 @@ void LspClient::handleResponse(const QJsonObject &obj)
     } else if (method == "shutdown") {
         m_initialized = 0;
     } else if (method == "completion") {
-        QJsonArray items = obj["result"].toObject()["items"].toArray();
+        QJsonValue resultVal = obj["result"];
+        QJsonArray items;
+        if (resultVal.isObject()) {
+            items = resultVal.toObject()["items"].toArray();
+        } else if (resultVal.isArray()) {
+            items = resultVal.toArray();
+        }
         emit completionReceived(items, id);
     } else if (method == "definition") {
-        QJsonArray locations = obj["result"].toArray();
+        QJsonArray locations;
+        QJsonValue resultVal = obj["result"];
+        if (resultVal.isObject()) {
+            locations.append(resultVal);
+        } else if (resultVal.isArray()) {
+            locations = resultVal.toArray();
+        }
         emit definitionReceived(locations, id);
     } else if (method == "hover") {
         QJsonObject contents = obj["result"].toObject();
@@ -495,17 +501,35 @@ void LspClient::handleResponse(const QJsonObject &obj)
         QJsonObject help = obj["result"].toObject();
         emit signatureHelpReceived(help, id);
     } else if (method == "declaration") {
-        QJsonArray locations = obj["result"].toArray();
+        QJsonArray locations;
+        QJsonValue resultVal = obj["result"];
+        if (resultVal.isObject()) {
+            locations.append(resultVal);
+        } else if (resultVal.isArray()) {
+            locations = resultVal.toArray();
+        }
         emit declarationReceived(locations, id);
     } else if (method == "typeDefinition") {
-        QJsonArray locations = obj["result"].toArray();
+        QJsonArray locations;
+        QJsonValue resultVal = obj["result"];
+        if (resultVal.isObject()) {
+            locations.append(resultVal);
+        } else if (resultVal.isArray()) {
+            locations = resultVal.toArray();
+        }
         emit typeDefinitionReceived(locations, id);
     } else if (method == "implementation") {
-        QJsonArray locations = obj["result"].toArray();
+        QJsonArray locations;
+        QJsonValue resultVal = obj["result"];
+        if (resultVal.isObject()) {
+            locations.append(resultVal);
+        } else if (resultVal.isArray()) {
+            locations = resultVal.toArray();
+        }
         emit implementationReceived(locations, id);
     } else if (method == "formatting" || method == "rangeFormatting") {
         QJsonArray edits = obj["result"].toArray();
-        emit formattingReceived(QString(), edits);
+        emit formattingReceived(m_lastFormattingUri, edits);
     }
 }
 
@@ -523,9 +547,7 @@ void LspClient::handleNotification(const QJsonObject &obj)
             diags.append(parseDiagnostic(val.toObject()));
         }
 
-        QMutexLocker locker(&m_mutex);
         m_diagnostics[uri] = diags;
-        locker.unlock();
 
         emit diagnosticsReceived(uri, diags);
     } else if (method == "window/logMessage") {
@@ -539,41 +561,16 @@ void LspClient::handleNotification(const QJsonObject &obj)
 
 void LspClient::handleRequest(const QJsonObject &obj)
 {
-    // Server requests - handle if needed
     QString method = obj["method"].toString();
     int id = obj["id"].toInt();
 
     if (method == "window/workDoneProgress/create") {
         sendMessage(createResponse(id, QJsonObject{{"_supported", true}}));
+    } else if (method == "workspace/configuration") {
+        sendMessage(createResponse(id, QJsonObject{{"items", QJsonArray{}}}));
+    } else if (method == "client/registerCapability") {
+        sendMessage(createResponse(id, QJsonObject{}));
     }
-}
-
-QByteArray LspClient::readMessage()
-{
-    QMutexLocker locker(&m_mutex);
-
-    // Parse Content-Length header
-    QByteArray headerEnd = "\r\n\r\n";
-    int headerEndPos = m_buffer.indexOf(headerEnd);
-    if (headerEndPos == -1)
-        return QByteArray();
-
-    QByteArray header = m_buffer.left(headerEndPos);
-    m_buffer.remove(0, headerEndPos + headerEnd.size());
-
-    // Extract Content-Length
-    QRegularExpression re("Content-Length:\\s*(\\d+)", QRegularExpression::CaseInsensitiveOption);
-    QRegularExpressionMatch match = re.match(header);
-    if (!match.hasMatch())
-        return QByteArray();
-
-    int contentLength = match.captured(1).toInt();
-    if (m_buffer.size() < contentLength)
-        return QByteArray();
-
-    QByteArray msg = m_buffer.left(contentLength);
-    m_buffer.remove(0, contentLength);
-    return msg;
 }
 
 QJsonObject LspClient::createRequest(const QString &method, const QJsonObject &params, int id)
@@ -640,23 +637,22 @@ QList<QTextEdit::ExtraSelection> LspClient::createDiagnosticSelections(const Dia
 
     switch (diag.severity) {
     case Diagnostic::Error:
-        color = QColor(255, 80, 80, 80); // Red
+        color = QColor(255, 80, 80, 80);
         break;
     case Diagnostic::Warning:
-        color = QColor(255, 200, 50, 80); // Yellow/Orange
+        color = QColor(255, 200, 50, 80);
         break;
     case Diagnostic::Information:
-        color = QColor(50, 150, 255, 60); // Blue
+        color = QColor(50, 150, 255, 60);
         break;
     case Diagnostic::Hint:
-        color = QColor(150, 150, 150, 40); // Gray
+        color = QColor(150, 150, 150, 40);
         break;
     }
 
     sel.format.setUnderlineColor(color);
     sel.format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
 
-    // Create selection for the diagnostic range
     QTextCursor cursor(const_cast<QTextDocument*>(doc));
     QTextBlock startBlock = doc->findBlockByNumber(diag.line);
     QTextBlock endBlock = doc->findBlockByNumber(diag.endLine);
