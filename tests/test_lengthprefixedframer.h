@@ -6,7 +6,7 @@
 class TestLengthPrefixedFramer : public QObject
 {
     Q_OBJECT
-public slots:
+private slots:
     void testBasicFrameAndRead();
     void testPartialFrameAndReadSplitContent();
     void testMultipleMessages();

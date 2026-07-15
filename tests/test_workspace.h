@@ -6,7 +6,7 @@
 class TestWorkspace : public QObject
 {
     Q_OBJECT
-public slots:
+private slots:
     void testLoadValidWorkspace();
     void testLoadMissingFile();
     void testLoadInvalidJson();

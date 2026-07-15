@@ -6,7 +6,7 @@
 class TestHttpClientPanel : public QObject
 {
     Q_OBJECT
-public slots:
+private slots:
     void testSubstituteNoEnvReturnsInputUnchanged();
     void testSubstituteBasicVar();
     void testSubstituteMissingVarLeavesPlaceholder();

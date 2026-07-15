@@ -10,6 +10,16 @@ set(TEST_SOURCES
     test_httpclientpanel.cpp
     test_lengthprefixedframer.h
     test_lengthprefixedframer.cpp
+    test_dependencyresolver.h
+    test_dependencyresolver.cpp
+    test_eventbus.h
+    test_eventbus.cpp
+    test_permissionmanager.h
+    test_permissionmanager.cpp
+    test_pluginsettings.h
+    test_pluginsettings.cpp
+    test_taskrunner.h
+    test_taskrunner.cpp
 )
 
 qt_add_executable(scriptura_tests
