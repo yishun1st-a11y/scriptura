@@ -1,13 +1,5 @@
 # Scriptura
 
-<img src="icon.png" alt="Scriptura Icon" width="64"/>
-
-![Scriptura Preview](.github/assets/preview.gif)
-
-[![Storage](https://img.shields.io/github/repo-size/jason1015-coder/scriptura)](https://github.com/jason1015-coder/scriptura)
-[![Stars](https://img.shields.io/github/stars/jason1015-coder/scriptura/stargazers)](https://github.com/jason1015-coder/scriptura/stargazers)
-[![Forks](https://img.shields.io/github/forks/jason1015-coder/scriptura/network/members)](https://github.com/jason1015-coder/scriptura/network/members)
-
 A simple Qt-based text editor with project file browsing.
 
 ## Features
@@ -88,11 +80,6 @@ For Windows users, pre-built installers are available that bundle all Qt depende
 ### Building the Windows Installer
 
 See [WINDOWS_DEPLOYMENT.md](WINDOWS_DEPLOYMENT.md) for detailed instructions on building the Windows installer locally.
-
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/chart?repos=jason1015-coder/scriptura&type=date&legend=top-left&sealed_token=gXtlnjgRgPigLyjW4Hv6OAHuBkYh4VixMJDODovYum2_uTx-d80t95ixB2vHbGk5JS28BSv8qI7cYLiE5hLJOJRR_xf9Fg2ZRcx53emSVFQcd4SQIqyQqXZbWVEDh_cfTAQ0ClaBz8Bse578vTN8QzBY)](https://www.star-history.com/?repos=jason1015-coder%2Fscriptura&type=date&legend=top-left)
 
 
 ## License
