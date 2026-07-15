@@ -1,4 +1,4 @@
-./# This file is used to ignore files which are generated
+# This file is used to ignore files which are generated
 # ----------------------------------------------------------------------------
 
 *~
@@ -60,7 +60,7 @@ CMakeLists.txt.user*
 *.sdf
 *.opensdf
 *.vcxproj
-*vcxproj.*
+*vcproj.*
 
 # MinGW generated files
 *.Debug
@@ -71,8 +71,8 @@ scriptura
 scriptura.exe
 *.dll
 *.exe
-*.so
 *.dylib
+*.dSYM
 
 # QMake project file (CMake is canonical build system)
 *.pro
@@ -84,7 +84,6 @@ moc_predefs.h
 # Build directories
 /build/
 /cmake-build-*/
-/cmake-build-*/
 
 # Packaging reference artefacts (not part of the repo)
 /packaging/
@@ -92,18 +91,23 @@ moc_predefs.h
 
 # IDE / agent caches
 .kilo/
+.nanocoder/
 .qodo/
 .idea/
 .vscode/
 .qtcreator/
 .qtc/
 .qtc_clangd/
+.clangd/
 
 # Qt autogen
 *_autogen/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
+
+# CMake generated files
+compile_commands.json
 
 # Translation backups
 *.ts.bak
@@ -112,6 +116,5 @@ cmake_install.cmake
 *.ico
 
 # Deployment
-/deploy/
 /package/
 Scriptura-Setup.exe
