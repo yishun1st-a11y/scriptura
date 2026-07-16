@@ -6,7 +6,7 @@
 class TestConfigValidator : public QObject
 {
     Q_OBJECT
-public slots:
+private slots:
     void initTestCase();
     void cleanupTestCase();
     void testValidTabWidthAccepted();

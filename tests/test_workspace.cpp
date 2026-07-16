@@ -96,10 +96,10 @@ void TestWorkspace::testSaveAndReloadRoundTrip()
 void TestWorkspace::testAddRecentFileDedup()
 {
     Workspace ws;
-    ws.setRecentFiles({"a.cpp", "b.cpp", "a.cpp"});
-    ws.addRecentFile("c.cpp");
+    ws.setRecentFiles({"a.cpp", "b.cpp"});
+    ws.addRecentFile("a.cpp");
 
-    QVERIFY(ws.recentFiles().contains("c.cpp"));
+    QVERIFY(ws.recentFiles().contains("a.cpp"));
     int count = 0;
     for (const QString &f : ws.recentFiles())
         if (f == "a.cpp") ++count;

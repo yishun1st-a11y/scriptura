@@ -8,17 +8,21 @@
 
 void TestConfigValidator::initTestCase()
 {
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QCoreApplication::setOrganizationName("ScripturaTests");
+    QCoreApplication::setApplicationName("ConfigValidator");
+
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     m_settingsPath = dir.filePath("settings.ini");
-    QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, dir.path());
-    QSettings::setPath(QSettings::NativeFormat, QSettings::SystemScope, dir.path());
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
+    QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, dir.path());
 }
 
 void TestConfigValidator::cleanupTestCase()
 {
-    QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, QString());
-    QSettings::setPath(QSettings::NativeFormat, QSettings::SystemScope, QString());
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QString());
+    QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, QString());
 }
 
 void TestConfigValidator::testValidTabWidthAccepted()
